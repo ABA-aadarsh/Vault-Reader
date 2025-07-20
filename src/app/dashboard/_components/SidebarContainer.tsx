@@ -5,7 +5,12 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
   SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -27,8 +32,7 @@ export function AppSidebar() {
   const {toggleSidebar} = useSidebar()
   const {onOpen: onSearchLauncherOpen} = useSearchLauncher()
   return (
-    <Sidebar className="min-h-screen border-r border-border bg-card text-foreground flex flex-col">
-      {/* Header with logo and close button */}
+    <Sidebar className="bg-card text-foreground border-r-muted" variant="sidebar">
       <SidebarHeader className="flex items-center flex-row justify-between px-4 py-3 border-b border-border">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 bg-secondary rounded overflow-hidden relative">
