@@ -17,7 +17,7 @@ export default function RequireAuth({ children }: { children: React.ReactNode })
         setLoading(false);
       })
       .catch((err) => {
-        console.log("User not authenticated:", err);
+        
         router.push('/signin');
       });
   }, [router]);
