@@ -1,10 +1,13 @@
 "use client";
 
+import { useRouter } from 'next/navigation';
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { signUp } from '@/features/auth/auth.service';
+import { use } from 'react';
 
 // 1. Zod Schema
 const signUpSchema = z
@@ -23,6 +26,8 @@ const signUpSchema = z
 type SignUpFormData = z.infer<typeof signUpSchema>;
 
 export default function SignUpPage() {
+  const router = useRouter();
+
   const {
     register,
     handleSubmit,
@@ -31,9 +36,18 @@ export default function SignUpPage() {
     resolver: zodResolver(signUpSchema),
   });
 
-  const onSubmit = (data: SignUpFormData) => {
+  const onSubmit = async (data: SignUpFormData) => {
     console.log("Signup data:", data);
     // Send to backend or API here
+     try {
+    const fullName = `${data.firstName} ${data.lastName}`;
+    await signUp(data.email, data.password, fullName);
+    router.push('/dashboard');
+  } catch (err: any) {
+    if (err) {
+      alert(err.message || 'Sign up failed');
+    } 
+  }
   };
 
   return (

@@ -1,10 +1,12 @@
 "use client";
 
+import { useRouter } from 'next/navigation';
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { signIn } from '@/features/auth/auth.service';
 
 // 1. Zod schema
 const signInSchema = z.object({
@@ -15,6 +17,7 @@ const signInSchema = z.object({
 type SignInFormData = z.infer<typeof signInSchema>;
 
 export default function SignInPage() {
+  const router = useRouter();
   // 2. React Hook Form setup
   const {
     register,
@@ -25,9 +28,15 @@ export default function SignInPage() {
   });
 
   // 3. Submit handler
-  const onSubmit = (data: SignInFormData) => {
+  const onSubmit = async (data: SignInFormData) => {
     console.log("Submitted data:", data);
     // auth logic goes here
+     try {
+      await signIn(data.email, data.password);
+      router.push('/dashboard');
+    } catch (err: any) {
+      alert(err.message || 'Sign in failed.');
+    }
   };
 
   return (
