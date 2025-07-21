@@ -6,8 +6,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { signUp } from '@/features/auth/auth.service';
-import { use } from 'react';
+import AuthAPI from '@/features/appwrite/auth/auth.service';
 
 // 1. Zod Schema
 const signUpSchema = z
@@ -41,7 +40,7 @@ export default function SignUpPage() {
     // Send to backend or API here
      try {
     const fullName = `${data.firstName} ${data.lastName}`;
-    await signUp(data.email, data.password, fullName);
+    await AuthAPI.signup(data.email, data.password, fullName);
     router.push('/dashboard');
   } catch (err: any) {
     if (err) {

@@ -6,7 +6,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { signIn } from '@/features/auth/auth.service';
+import AuthAPI from '@/features/appwrite/auth/auth.service';
 
 // 1. Zod schema
 const signInSchema = z.object({
@@ -32,7 +32,7 @@ export default function SignInPage() {
     console.log("Submitted data:", data);
     // auth logic goes here
      try {
-      await signIn(data.email, data.password);
+      await AuthAPI.signin(data.email, data.password);
       router.push('/dashboard');
     } catch (err: any) {
       alert(err.message || 'Sign in failed.');

@@ -1,6 +1,7 @@
 "use client";
 
 import { buttonVariants } from "@/components/ui/button";
+import Image from "next/image";
 import Link from "next/link";
 
 export const Navbar = () => {
@@ -8,8 +9,15 @@ export const Navbar = () => {
     <header className="w-full border-b border-border bg-background text-foreground">
       <div className="max-w-6xl mx-auto h-16 px-4 sm:px-6 lg:px-8 flex items-center justify-between">
         {/* Logo / App Name */}
-        <Link href="/" className="text-lg font-semibold tracking-tight hover:opacity-90 transition-opacity">
-          Vault Reader
+        <Link href="/" className="text-lg font-semibold tracking-tight hover:opacity-90 transition-opacity flex items-center gap-2">
+          <Image
+            src={"/logo.png"}
+            alt="Logo"
+            width={45}
+            height={45}
+            className="object-contain overflow-hidden rounded-sm"
+          />
+          <h1>Vault Reader</h1>
         </Link>
 
         {/* Navigation Links */}

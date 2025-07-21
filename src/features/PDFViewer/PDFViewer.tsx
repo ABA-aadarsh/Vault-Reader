@@ -421,6 +421,7 @@ export const PDFViewer = ({
                             renderTextLayer={false} // Disable to prevent AbortException
                             width={fitToWidth && containerRef.current?.clientWidth ? Math.min(containerRef.current?.clientWidth * 0.9, 1200) : undefined}
                             onLoadSuccess={pageNumber === 1 ? onFirstPageLoadSuccess : undefined}
+                            className={"dark:invert"}
                           />
                         </div>
                       </div>
