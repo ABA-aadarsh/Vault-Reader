@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 @import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
@@ -165,4 +166,7 @@
 
 body {
     letter-spacing: var(--tracking-normal);
+}
+._contentEditable_sects_380{
+    @apply focus-visible:!outline-none;
 }
