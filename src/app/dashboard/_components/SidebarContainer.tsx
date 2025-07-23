@@ -17,8 +17,9 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import Image from "next/image";
-import { PanelLeftClose, Search, Star} from "lucide-react";
+import { PanelLeftClose, Search, Star } from "lucide-react";
 import { useSearchLauncher } from "@/features/Search/provider/SearchLauncherProvider";
+import { useRouter } from "next/navigation";
 
 const mockPdfs = [
   { id: "1", title: "Compiler Design.pdf", isFavorite: true },
@@ -29,12 +30,15 @@ const mockPdfs = [
 ];
 
 export function AppSidebar() {
-  const {toggleSidebar} = useSidebar()
-  const {onOpen: onSearchLauncherOpen} = useSearchLauncher()
+  const { toggleSidebar } = useSidebar()
+  const { onOpen: onSearchLauncherOpen } = useSearchLauncher()
+  const router = useRouter()
   return (
     <Sidebar className="bg-card text-foreground border-r-muted" variant="sidebar">
-      <SidebarHeader className="flex items-center flex-row justify-between px-4 py-3 border-b border-border">
-        <div className="flex items-center gap-2">
+      <SidebarHeader className="flex items-center flex-row justify-between px-4 py-3 border-b border-border ">
+        <div className="flex items-center gap-2 cursor-pointer"
+          onClick={() => router.push("/dashboard")}
+        >
           <div className="w-8 h-8 bg-secondary rounded overflow-hidden relative">
             <Image
               src="/logo.png"
@@ -63,7 +67,7 @@ export function AppSidebar() {
               className: "w-full !justify-between !px-2"
             })}>
               <div className="flex items-center gap-2">
-                <Search/>
+                <Search />
                 <span>Search</span>
               </div>
               <div className="hidden sm:flex items-center justify-end gap-1 text-xs text-muted-foreground">

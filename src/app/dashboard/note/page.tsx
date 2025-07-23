@@ -4,6 +4,9 @@ import { PDFViewer } from "@/features/PDFViewer/PDFViewer";
 
 export default function Page () {
   return (
-    <PDFViewer/>
+    <div className="grid grid-cols-2 ">
+      <PDFViewer/>
+      <NoteEditor/>
+    </div>
   )
 }
