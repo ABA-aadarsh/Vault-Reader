@@ -1,0 +1,165 @@
+/* MDX Editor Theme - Consistent with Global CSS */
+
+.dark-editor {
+  /* Base colors using your global design system */
+  --accentBase: var(--primary);
+  --accentBgSubtle: color-mix(in oklch, var(--primary) 10%, var(--background));
+  --accentBg: color-mix(in oklch, var(--primary) 15%, var(--background));
+  --accentBgHover: color-mix(in oklch, var(--primary) 20%, var(--background));
+  --accentBgActive: color-mix(in oklch, var(--primary) 25%, var(--background));
+  --accentLine: color-mix(in oklch, var(--primary) 30%, var(--background));
+  --accentBorder: color-mix(in oklch, var(--primary) 40%, var(--background));
+  --accentBorderHover: color-mix(in oklch, var(--primary) 50%, var(--background));
+  --accentSolid: var(--primary);
+  --accentSolidHover: color-mix(in oklch, var(--primary) 85%, white);
+  --accentText: var(--primary);
+  --accentTextContrast: var(--primary-foreground);
+
+  /* Base neutral colors */
+  --baseBase: var(--background);
+  --baseBgSubtle: var(--card);
+  --baseBg: var(--muted);
+  --baseBgHover: color-mix(in oklch, var(--muted) 90%, var(--foreground));
+  --baseBgActive: color-mix(in oklch, var(--muted) 85%, var(--foreground));
+  --baseLine: var(--border);
+  --baseBorder: var(--border);
+  --baseBorderHover: color-mix(in oklch, var(--border) 80%, var(--foreground));
+  --baseSolid: var(--secondary);
+  --baseSolidHover: color-mix(in oklch, var(--secondary) 90%, var(--foreground));
+  --baseText: var(--foreground);
+  --baseTextContrast: var(--muted-foreground);
+
+  /* Admonition colors using chart colors from your theme */
+  --admonitionTipBg: color-mix(in oklch, var(--chart-2) 15%, var(--background));
+  --admonitionTipBorder: color-mix(in oklch, var(--chart-2) 40%, var(--background));
+  
+  --admonitionInfoBg: color-mix(in oklch, var(--chart-1) 15%, var(--background));
+  --admonitionInfoBorder: color-mix(in oklch, var(--chart-1) 40%, var(--background));
+  
+  --admonitionCautionBg: color-mix(in oklch, var(--chart-3) 15%, var(--background));
+  --admonitionCautionBorder: color-mix(in oklch, var(--chart-3) 40%, var(--background));
+  
+  --admonitionDangerBg: color-mix(in oklch, var(--destructive) 15%, var(--background));
+  --admonitionDangerBorder: color-mix(in oklch, var(--destructive) 40%, var(--background));
+  
+  --admonitionNoteBg: var(--muted);
+  --admonitionNoteBorder: var(--border);
+
+  /* Typography using your font system */
+  font-family: var(--font-sans);
+  --font-mono: var(--font-mono);
+  
+  /* Text color */
+  color: var(--foreground);
+  
+  /* Background */
+  --basePageBg: var(--background);
+  background: var(--basePageBg);
+  
+  /* Border radius consistency */
+  --radius: var(--radius);
+  
+  /* Shadow consistency */
+  --shadow: var(--shadow);
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+}
+
+/* Light theme variant */
+:root .light-editor,
+.light-editor {
+  /* Base colors for light mode */
+  --accentBase: var(--primary);
+  --accentBgSubtle: color-mix(in oklch, var(--primary) 8%, var(--background));
+  --accentBg: color-mix(in oklch, var(--primary) 12%, var(--background));
+  --accentBgHover: color-mix(in oklch, var(--primary) 16%, var(--background));
+  --accentBgActive: color-mix(in oklch, var(--primary) 20%, var(--background));
+  --accentLine: color-mix(in oklch, var(--primary) 25%, var(--background));
+  --accentBorder: color-mix(in oklch, var(--primary) 35%, var(--background));
+  --accentBorderHover: color-mix(in oklch, var(--primary) 45%, var(--background));
+  --accentSolid: var(--primary);
+  --accentSolidHover: color-mix(in oklch, var(--primary) 90%, black);
+  --accentText: var(--primary);
+  --accentTextContrast: var(--primary-foreground);
+
+  /* Base neutral colors for light mode */
+  --baseBase: var(--background);
+  --baseBgSubtle: var(--card);
+  --baseBg: var(--muted);
+  --baseBgHover: color-mix(in oklch, var(--muted) 95%, var(--foreground));
+  --baseBgActive: color-mix(in oklch, var(--muted) 92%, var(--foreground));
+  --baseLine: var(--border);
+  --baseBorder: var(--border);
+  --baseBorderHover: color-mix(in oklch, var(--border) 85%, var(--foreground));
+  --baseSolid: var(--secondary);
+  --baseSolidHover: color-mix(in oklch, var(--secondary) 95%, var(--foreground));
+  --baseText: var(--foreground);
+  --baseTextContrast: var(--muted-foreground);
+
+  /* Admonition colors for light mode */
+  --admonitionTipBg: color-mix(in oklch, var(--chart-2) 12%, var(--background));
+  --admonitionTipBorder: color-mix(in oklch, var(--chart-2) 30%, var(--background));
+  
+  --admonitionInfoBg: color-mix(in oklch, var(--chart-1) 12%, var(--background));
+  --admonitionInfoBorder: color-mix(in oklch, var(--chart-1) 30%, var(--background));
+  
+  --admonitionCautionBg: color-mix(in oklch, var(--chart-3) 12%, var(--background));
+  --admonitionCautionBorder: color-mix(in oklch, var(--chart-3) 30%, var(--background));
+  
+  --admonitionDangerBg: color-mix(in oklch, var(--destructive) 12%, var(--background));
+  --admonitionDangerBorder: color-mix(in oklch, var(--destructive) 30%, var(--background));
+  
+  --admonitionNoteBg: var(--muted);
+  --admonitionNoteBorder: var(--border);
+
+  font-family: var(--font-sans);
+  --font-mono: var(--font-mono);
+  color: var(--foreground);
+  --basePageBg: var(--background);
+  background: var(--basePageBg);
+}
+
+/* Additional MDX Editor specific styles for consistency */
+.mdxeditor-toolbar {
+  background: var(--card) !important;
+  border-color: var(--border) !important;
+  color: var(--card-foreground) !important;
+}
+
+.mdxeditor-editor {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+}
+
+/* Ensure proper theming based on your dark class */
+.dark .mdx-editor,
+.dark .dark-editor {
+  /* All dark theme variables are already set above */
+}
+
+/* For components that need to respect your theme */
+.mdxeditor-popup {
+  background: var(--popover) !important;
+  border-color: var(--border) !important;
+  color: var(--popover-foreground) !important;
+  box-shadow: var(--shadow-lg);
+  border-radius: var(--radius);
+}
+
+.mdxeditor-button {
+  background: transparent;
+  color: var(--foreground);
+  border-radius: calc(var(--radius) - 2px);
+}
+
+.mdxeditor-button:hover {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+
+.mdxeditor-button[data-state="on"] {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}

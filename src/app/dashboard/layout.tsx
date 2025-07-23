@@ -6,6 +6,7 @@ import { SearchLauncher } from "@/features/Search/components/SearchLauncher";
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css'
 import RequireAuth from "@/features/appwrite/auth/components/RequireAuth";
+import FileDropZone from "@/features/Books/provider/BookDropAddProvider";
 
 export default function RootLayout({
   children,
@@ -14,17 +15,19 @@ export default function RootLayout({
 }>) {
   return (
     <RequireAuth>
-       <SearchLauncherProvider>
-      <SidebarProvider>
-        <AppSidebar />
-        <SidebarInset>
-          <main className="flex-1">
-            {children}
-          </main>
-        </SidebarInset>
-      </SidebarProvider>
-      <SearchLauncher />
-    </SearchLauncherProvider>
+      <SearchLauncherProvider>
+        <FileDropZone>
+          <SidebarProvider>
+            <AppSidebar />
+            <SidebarInset>
+              <main className="flex-1">
+                {children}
+              </main>
+            </SidebarInset>
+          </SidebarProvider>
+          <SearchLauncher />
+        </FileDropZone>
+      </SearchLauncherProvider>
     </RequireAuth>
   );
 }
