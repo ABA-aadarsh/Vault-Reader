@@ -6,7 +6,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import AuthAPI from '@/features/appwrite/auth/auth.service';
+import AuthAPI from '@/features/supabase/auth/auth.service';
 
 // 1. Zod schema
 const signInSchema = z.object({

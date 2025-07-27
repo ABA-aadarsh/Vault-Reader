@@ -1,8 +1,8 @@
-import { ID, Databases, Storage } from "appwrite";
+import { ID, Databases, Storage, Permission, Role } from "appwrite";
 import { db } from "@/lib/dexie"; // your Dexie IndexedDB setup
 import { AppwriteClient } from "@/features/appwrite"; // initialized Appwrite client
-import { v4 as uuidv4 } from 'uuid';
-
+import { v4 as uuidv4 } from "uuid";
+import AuthAPI from "@/features/appwrite/auth/auth.service";
 
 const BUCKET_ID = process.env.NEXT_PUBLIC_APPWRITE_BUCKET_ID!;
 const META_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_META_COLLECTION_ID!;
@@ -11,143 +11,62 @@ const PERM_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_PERM_COLLECTION_ID!;
 const storage = new Storage(AppwriteClient);
 const databases = new Databases(AppwriteClient);
 
-// // Local DB insert
-// async function savePdfLocally(title: string, file: File) {
-//   await db.pdfs.add({
-//     title,
-//     file,
-//     uploaded: false,
-//   });
-// }
-
-// // Upload to Appwrite Storage
-// async function uploadPdfToStorage(file: File) {
-//   const uploadedFile = await storage.createFile(BUCKET_ID, ID.unique(), file);
-//   return uploadedFile;
-// }
-
-// // Create document in Appwrite DB
-// async function createPdfDocument(
-//   userId: string,
-//   title: string,
-//   author: string,
-//   tags: string[],
-//   fileId: string,
-//   isFavourite: boolean,
-//   updatedAt: string,
-//   note: string,
-//   image: string
-// ) {
-//   const doc = await databases.createDocument(
-//     DATABASE_ID,
-//     COLLECTION_ID,
-//     ID.unique(),
-//     {
-//       userId,
-//       title,
-//       author,
-//       tags,
-//       fileId,
-//       isFavourite,
-//       updatedAt,
-//       note,
-//       image,
-//     }
-//   );
-//   return doc;
-// }
-
-// // Direct online PDF upload (use if online only)
-// async function uploadPdfOnline(
-//   userId: string,
-//   title: string,
-//   author: string,
-//   tags: string[],
-//   fileId: string,
-//   isFavourite: boolean,
-//   updatedAt: string,
-//   note: string,
-//   image: string,
-//   file: File
-// ) {
-//   const uploaded = await uploadPdfToStorage(file);
-//   const doc = await createPdfDocument(
-//     userId,
-//     title,
-//     author,
-//     tags,
-//     uploaded.$id,
-//     isFavourite,
-//     updatedAt,
-//     note,
-//     image
-//   );
-//   return doc;
-// }
-
-// // only form index db
-// async function getUserBooks(userId: string) {
-//   const res = await databases.listDocuments(DATABASE_ID, COLLECTION_ID, [
-//     Query.equal("userId", userId),
-//   ]);
-//   return res.documents;
-// }
-
 async function uploadBook(
-  userId: string,  //
-  title: string,  
+  //   userId: string,  //
+  title: string,
   author: string,
   tags: string[],
-//   fileId: string, //
-  fileUrl: string, 
+  //   fileId: string, //
+  fileUrl: string,
   isFavourite: boolean,
-  verified: string, //
-  note: string, 
+  //   verified: string, //
+  note: string,
   image: string,
-  permissioned_to: string[], //
+  //   permissioned_to: string[], //
   file: File,
   syncToCloud: boolean
 ) {
-
-  const docId = uuidv4(); 
+  const docId = uuidv4();
   const fileId = uuidv4();
+  const user = await AuthAPI.getCurrentUser();
+  const userId = user.$id;
+  const verified = new Date().toISOString();
 
-  if (!syncToCloud) {
-    // upload file to local index db
-    await db.files.add({
-      fileId,
-      file,
-      createdAt: new Date().toISOString(),
-    });
+  // upload file to local index db
+  await db.files.add({
+    fileId,
+    file,
+    createdAt: new Date().toISOString(),
+  });
 
-    await db.metadata.add({
-      docId,
-      userId,
-      title,
-      author,
-      tags: [],
-      fileId,
-      fileUrl,  
-      isFavourite,
-      verified: new Date().toISOString(),
-      note: "",
-      image: "",  //url or what
-    });
+  // upload file to local metadata db
+  await db.metadata.add({
+    docId,
+    userId,
+    title,
+    author,
+    tags,
+    fileId,
+    fileUrl,
+    isFavourite,
+    verified,
+    note,
+    image: "", //url or what
+  });
 
-    await db.permissions.add({
-      fileId,
-      permissioned_to: [],
-    });
-  }else {
+  await db.permissions.add({
+    fileId,
+    permissioned_to: [],
+  });
 
-    //  Upload file to Appwrite storage with controlled fileId
+  if (syncToCloud) {
     await storage.createFile(BUCKET_ID, fileId, file);
 
     // Create metadata doc
     await databases.createDocument(
       DATABASE_ID,
       META_COLLECTION_ID,
-      ID.unique(),
+      docId,  //Id
       {
         userId,
         title,
@@ -159,21 +78,31 @@ async function uploadBook(
         verified, //which time to put here?
         note,
         image,
-      }
+      },
+      [
+        Permission.read(Role.user(userId)),
+        Permission.update(Role.user(userId)),
+        Permission.delete(Role.user(userId)),
+      ]
     );
 
     // Create permission doc
     await databases.createDocument(
       DATABASE_ID,
       PERM_COLLECTION_ID,
-      ID.unique(),
+      fileId,  // Id 
       {
-        fileId,
-        permissioned_to, //need to make schema for permissions
-      }
+        permissioned_to: [userId], //permissioned to the user who uploaded
+      },
+      [
+        Permission.read(Role.user(userId)),
+        Permission.update(Role.user(userId)),
+        Permission.delete(Role.user(userId)),
+      ]
     );
-  } 
+  }
 }
+
 
 const PdfAPI = {
   uploadBook,
