@@ -8,12 +8,13 @@ const BUCKET_NAME = process.env.NEXT_PUBLIC_SUPABASE_BUCKET_NAME!;
 
 async function uploadBook(
   title: string,
-  author: string,
-  tags: string[],
-  fileUrl: string,
+  author: string, //origin
+  tags: string[], //verified
+  progress: number,
+  status: string[],
   isFavourite: boolean,
+  imageUrl: string,
   note: string,
-  image: string,
   file: File,
   syncToCloud: boolean
 ) {
@@ -26,34 +27,32 @@ async function uploadBook(
   }
   const userId = user.id;
   const verified = new Date().toISOString();
-
+  const version = new Date().toISOString();
   try {
     // Upload file to local IndexedDB
     await db.files.add({
       fileId,
       file,
-      createdAt: new Date().toISOString(),
+      
     });
 
     // Upload metadata to local IndexedDB
     await db.metadata.add({
-      docId,
-      userId,
-      title,
+      docId: docId,                           
+      title, 
       author,
       tags,
-      fileId,
-      fileUrl,
+      fileId: fileId,
+      userId: userId,
+      version,
+      progress,
+      status,
       isFavourite,
+      imageUrl: "", // url or what
       verified,
+      origin,
       note,
-      image: "", // url or what
-    });
 
-    // Upload permissions to local IndexedDB
-    await db.permissions.add({
-      fileId,
-      permissioned_to: [],
     });
 
     if (syncToCloud) {
@@ -72,28 +71,24 @@ async function uploadBook(
         throw new Error(`File upload failed: ${fileError.message}`);
       }
 
-      // Get the public URL for the uploaded file
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from(BUCKET_NAME).getPublicUrl(fileName);
-
       // Create metadata record in Supabase
       const { data: metadataData, error: metadataError } = await supabase
         .from("metadata")
         .insert({
-          id: docId,
-          user_id: userId,
-          title,
-          author,
-          tags,
-          file_id: fileId,
-          file_url: publicUrl, // Use the actual uploaded file URL
-          is_favourite: isFavourite,
-          verified,
-          note,
-          image,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
+            id: docId,
+            title, 
+            author,
+            tags,
+            file_id: fileId,
+            userId: userId,
+            version,
+            progress, 
+            isFavourite,
+            imageUrl,
+            verified,
+            origin,
+            note,
+         
         })
         .select()
         .single();
@@ -110,8 +105,6 @@ async function uploadBook(
         .insert({
           file_id: fileId,
           permissioned_to: [userId], // Array of user IDs who have permission
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
         })
         .select()
         .single();
@@ -124,30 +117,13 @@ async function uploadBook(
           `Permission creation failed: ${permissionError.message}`
         );
       }
-
-      return {
-        docId,
-        fileId,
-        fileUrl: publicUrl,
-        metadata: metadataData,
-        permissions: permissionData,
-      };
     }
-
-    return {
-      docId,
-      fileId,
-      fileUrl: null, // No cloud URL when not syncing
-      metadata: null,
-      permissions: null,
-    };
   } catch (error) {
     console.error("Error uploading book:", error);
     // Clean up local storage if needed
     try {
       await db.files.where("fileId").equals(fileId).delete();
       await db.metadata.where("docId").equals(docId).delete();
-      await db.permissions.where("fileId").equals(fileId).delete();
     } catch (cleanupError) {
       console.error("Error cleaning up local storage:", cleanupError);
     }
@@ -155,29 +131,58 @@ async function uploadBook(
   }
 }
 
-// Additional helper functions for Supabase operations
-async function getBooks(userId?: string) {
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-  if (userError || !user) {
-    throw new Error("User not authenticated");
+async function listCloudBooks() {
+  try {
+    const user = await AuthAPI.getCurrentUser();
+    if (!user) {
+      throw new Error("User not found");
+    }
+    const userId = user.id;
+console.log({userId})
+    const { data, error } = await supabase
+      .from("metadata")
+      .select("*")
+      .eq("user_id", userId)
+      
+
+    if (error) {
+      throw new Error(`Failed to fetch books from cloud: ${error.message}`);
+    }
+
+    return data;
+  } catch (error) {
+    throw new Error(
+      `Failed to fetch books from cloud: ${
+        error instanceof Error ? error.message : "Unknown error"
+      }`
+    );
   }
+}
 
-  const targetUserId = userId || user.id;
-
-  const { data, error } = await supabase
-    .from("metadata")
-    .select("*")
-    .eq("user_id", targetUserId)
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    throw new Error(`Failed to fetch books: ${error.message}`);
+async function listLocalBooks() {
+  try {
+    const books = await db.metadata.toArray();
+    return books;
+  } catch (error) {
+    throw new Error(
+      `Failed to fetch books from local storage: ${
+        error instanceof Error ? error.message : "Unknown error"
+      }`
+    );
   }
+}
 
-  return data;
+async function getlocalBook(fileId: string) {
+  try {
+    const file = await db.files.where("fileId").equals(fileId).first();
+    return file?.file || null;
+  } catch (error) {
+    throw new Error(
+      `Failed to fetch book file: ${
+        error instanceof Error ? error.message : "Unknown error"
+      }`
+    );
+  }
 }
 
 async function deleteBook(docId: string) {
@@ -226,7 +231,6 @@ async function deleteBook(docId: string) {
     // Also delete from local storage
     await db.files.where("fileId").equals(metadata.file_id).delete();
     await db.metadata.where("docId").equals(docId).delete();
-    await db.permissions.where("fileId").equals(metadata.file_id).delete();
   } catch (error) {
     console.error("Error deleting book:", error);
     throw error;
@@ -275,9 +279,9 @@ async function updateBookMetadata(
 
 const BooksAPI = {
   uploadBook,
-  getBooks,
-  deleteBook,
-  updateBookMetadata,
+  listLocalBooks,
+  listCloudBooks,
+  getlocalBook,
 };
 
 export default BooksAPI;

@@ -4,41 +4,37 @@ export interface FileEntry {
   id?: number;
   fileId: string;
   file: File;
-  createdAt: string;
+  
 }
 
 export interface MetadataEntry {
-  id?: number;
   docId: string;
-  userId: string;
   title: string;
   author: string;
   tags: string[];
   fileId: string;
-  fileUrl: string;
+  userId: string;
+  version: string;
+  progress: number;
+  status: string[];
   isFavourite: boolean;
+  imageUrl: string;
   verified: string;
+  origin: string;
   note: string;
-  image: string;
 }
 
-export interface PermissionEntry {
-  id?: number;
-  fileId: string;
-  permissioned_to: string[];
-}
 
 class BookVaultDexie extends Dexie {
   files!: Table<FileEntry>;
   metadata!: Table<MetadataEntry>;
-  permissions!: Table<PermissionEntry>;
+ 
 
   constructor() {
     super("bookVaultDB");
     this.version(1).stores({
-      files: "++id, fileId, createdAt",
-      metadata: "++id, fileId, userId, title",
-      permissions: "++id, fileId",
+      files: "++id, fileId",
+      metadata: "docId, fileId, userId, title",
     });
   }
 }
