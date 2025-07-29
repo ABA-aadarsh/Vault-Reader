@@ -14,7 +14,7 @@ import {
 
 export default function Page() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const { data: dummyBooks, isLoading, isError } = useCloudBookList();
+  const { data: booksList, isLoading, isError } = useCloudBookList();
   // const localBooks: Book[] = []
 
   if (isLoading) return <p>Loading...</p>;
@@ -54,9 +54,9 @@ export default function Page() {
 
       {viewMode === "grid" ? (
         <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
-          {dummyBooks?.map((book, i) => (
+          {booksList?.map((book, i) => (
             <BookCard
-              key={book.fileId}
+              key={book.docId}
               book={book}
               type="grid"
               versionStatus={
@@ -67,9 +67,9 @@ export default function Page() {
         </div>
       ) : (
         <div className="space-y-4">
-          {dummyBooks?.map((book, i) => (
+          {booksList?.map((book, i) => (
             <BookCard
-              key={book.fileId}
+              key={book.docId}
               book={book}
               type="list"
               versionStatus={
