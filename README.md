@@ -1,36 +1,43 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+<div align="center">
 
-## Getting Started
+<img src="./public/logo.png" height="120px" alt="Vault Reader" title="Vault Reader" />
 
-First, run the development server:
+<br>
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+# Vault Reader (Under Development)
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+A minimal, modern, cross-platform synced e-book reader.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+</div>
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
-## Learn More
 
-To learn more about Next.js, take a look at the following resources:
+### Main Features
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- Self Host with supabase
+- Modern Minimal UI
+- Cross platform sync
+- Offline first
+- Rich inbuilt, Note taking
+- Inbuilt dictionary and web Search
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-## Deploy on Vercel
+### Screenshots
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+![x4u9NXUr](https://github.com/user-attachments/assets/a1ccc340-66b9-4219-b2d3-6409deeffbdc)
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+![WpAM07tK](https://github.com/user-attachments/assets/e35430c3-8c4f-4b44-ac46-9cf07bc45665)
+
+![by0H8GER](https://github.com/user-attachments/assets/3b04e432-8ed9-4406-a4e6-83f792b56304)
+
+![tyw5xsuw](https://github.com/user-attachments/assets/d123f2a7-c258-4e1f-877d-791e3058e443)
+
+---
+
+
+### [License](./LICENSE)
+
+
+
+Vault Reader is licensed under the Apache License, Version 2.0.  
+See the [LICENSE](./LICENSE) file for more details.
