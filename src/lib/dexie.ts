@@ -4,7 +4,6 @@ export interface FileEntry {
   id?: number;
   fileId: string;
   file: File;
-  
 }
 
 export interface MetadataEntry {
@@ -14,20 +13,26 @@ export interface MetadataEntry {
   tags: string[];
   fileId: string;
   userId: string;
-  version: string;
-  progress: number;
-  status: string[];
+  version?: string;
+  progress?: number;
+  status?: string[];
   isFavourite: boolean;
-  imageUrl: string;
-  verified: string;
-  origin: string;
-  note: string;
+  imageId?: string;
+  verified?: string;
+  origin?: string;
+  note?: string;
 }
 
+export interface ImageEntry{
+    id?: number;
+  imageId: string;
+  image: File;
+}
 
 class BookVaultDexie extends Dexie {
   files!: Table<FileEntry>;
   metadata!: Table<MetadataEntry>;
+  image!: Table<ImageEntry>;
  
 
   constructor() {
@@ -35,6 +40,7 @@ class BookVaultDexie extends Dexie {
     this.version(1).stores({
       files: "++id, fileId",
       metadata: "docId, fileId, userId, title",
+      image: "++id, imageId",
     });
   }
 }

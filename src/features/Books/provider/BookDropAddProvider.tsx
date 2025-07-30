@@ -1,13 +1,35 @@
-"use client"
-import React, { useState, useEffect, useCallback, createContext, useContext } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent } from '@/components/ui/card';
-import { Upload, FileText, Image, Plus, X, Heart, Cloud, CloudOff } from 'lucide-react';
+"use client";
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  createContext,
+  useContext,
+} from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  Upload,
+  FileText,
+  Image,
+  Plus,
+  X,
+  Heart,
+  Cloud,
+  CloudOff,
+} from "lucide-react";
+import BooksAPI from "@/features/supabase/books/book.service";
 
 // File type interface
 interface FileData {
@@ -35,100 +57,122 @@ const BookAddContext = createContext<BookAddContextType | undefined>(undefined);
 export function useBookAdd() {
   const context = useContext(BookAddContext);
   if (context === undefined) {
-    throw new Error('useBookAdd must be used within a BookAddProvider');
+    throw new Error("useBookAdd must be used within a BookAddProvider");
   }
   return context;
 }
 
 // File Drop Dialog Component
-const FileDropDialog = ({ isOpen, onClose, droppedFiles, isOnline }: {
+const FileDropDialog = ({
+  isOpen,
+  onClose,
+  droppedFiles,
+  isOnline,
+}: {
   isOpen: boolean;
   onClose: () => void;
   droppedFiles: File[];
   isOnline: boolean;
 }) => {
   const [formData, setFormData] = useState<FileData>({
-    title: '',
+    title: "",
     author: null,
     image: null,
     file: null,
     syncToCloud: isOnline,
     isFavourite: false,
-    tags: []
+    tags: [],
   });
-  const [newTag, setNewTag] = useState('');
-  const [authorInput, setAuthorInput] = useState('');
+  const [newTag, setNewTag] = useState("");
+  const [authorInput, setAuthorInput] = useState("");
 
   // Auto-populate file when dialog opens
   useEffect(() => {
     if (droppedFiles.length > 0) {
       const mainFile = droppedFiles[0];
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
         file: mainFile,
-        title: mainFile.name.replace(/\.[^/.]+$/, '') // Remove extension
+        title: mainFile.name.replace(/\.[^/.]+$/, ""), // Remove extension
       }));
     }
   }, [droppedFiles]);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file && file.type.startsWith('image/')) {
-      setFormData(prev => ({ ...prev, image: file }));
+    if (file && file.type.startsWith("image/")) {
+      setFormData((prev) => ({ ...prev, image: file }));
     }
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      setFormData(prev => ({ 
-        ...prev, 
+      setFormData((prev) => ({
+        ...prev,
         file: file,
-        title: prev.title || file.name.replace(/\.[^/.]+$/, '') // Auto-fill title if empty
+        title: prev.title || file.name.replace(/\.[^/.]+$/, ""), // Auto-fill title if empty
       }));
     }
   };
 
   const addTag = () => {
     if (newTag.trim() && !formData.tags.includes(newTag.trim())) {
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
-        tags: [...prev.tags, newTag.trim()]
+        tags: [...prev.tags, newTag.trim()],
       }));
-      setNewTag('');
+      setNewTag("");
     }
   };
 
   const removeTag = (tagToRemove: string) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      tags: prev.tags.filter(tag => tag !== tagToRemove)
+      tags: prev.tags.filter((tag) => tag !== tagToRemove),
     }));
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const finalData = {
       ...formData,
-      author: authorInput.trim() || null
+      author: authorInput.trim() || null,
     };
-    console.log('Book data submitted:', finalData);
     // Handle form submission here
+    try {
+      if (!finalData.file){
+        throw new Error("File is required.");
+      }
+      await  BooksAPI.uploadBook(
+        finalData.title,
+        finalData.author || '',
+        finalData.tags,
+        finalData.isFavourite,
+        finalData.image,
+        finalData.file,
+        finalData.syncToCloud,
+      );
+      console.log("Book data submitted:", finalData);
+    } catch (error) {
+      console.error("Book upload failed:", error);
+    }
+
     onClose();
     resetForm();
   };
 
   const resetForm = () => {
     setFormData({
-      title: '',
+      title: "",
       author: null,
       image: null,
       file: null,
       syncToCloud: isOnline,
       isFavourite: false,
-      tags: []
+      tags: [],
     });
-    setNewTag('');
-    setAuthorInput('');
+    setNewTag("");
+    setAuthorInput("");
   };
 
   return (
@@ -154,13 +198,21 @@ const FileDropDialog = ({ isOpen, onClose, droppedFiles, isOnline }: {
               <div className="space-y-6">
                 {/* Title Field */}
                 <div className="space-y-3">
-                  <Label htmlFor="title" className="text-sm font-medium text-foreground">
+                  <Label
+                    htmlFor="title"
+                    className="text-sm font-medium text-foreground"
+                  >
                     Book Title
                   </Label>
                   <Input
                     id="title"
                     value={formData.title}
-                    onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        title: e.target.value,
+                      }))
+                    }
                     placeholder="Enter book title..."
                     className="border-border rounded-lg h-11 focus:border-ring focus:ring-ring/20 bg-background"
                   />
@@ -168,7 +220,10 @@ const FileDropDialog = ({ isOpen, onClose, droppedFiles, isOnline }: {
 
                 {/* Author Field */}
                 <div className="space-y-3">
-                  <Label htmlFor="author" className="text-sm font-medium text-foreground">
+                  <Label
+                    htmlFor="author"
+                    className="text-sm font-medium text-foreground"
+                  >
                     Author
                   </Label>
                   <Input
@@ -183,7 +238,10 @@ const FileDropDialog = ({ isOpen, onClose, droppedFiles, isOnline }: {
                 {/* File Upload - Show input if no file is present */}
                 {!formData.file ? (
                   <div className="space-y-3">
-                    <Label htmlFor="file-upload" className="text-sm font-medium text-foreground">
+                    <Label
+                      htmlFor="file-upload"
+                      className="text-sm font-medium text-foreground"
+                    >
                       Book File *
                     </Label>
                     <div className="space-y-3">
@@ -227,7 +285,9 @@ const FileDropDialog = ({ isOpen, onClose, droppedFiles, isOnline }: {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => setFormData(prev => ({ ...prev, file: null }))}
+                          onClick={() =>
+                            setFormData((prev) => ({ ...prev, file: null }))
+                          }
                           className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
                         >
                           <X className="w-4 h-4" />
@@ -259,7 +319,9 @@ const FileDropDialog = ({ isOpen, onClose, droppedFiles, isOnline }: {
                     >
                       <Image className="w-5 h-5 text-muted-foreground group-hover:text-accent-foreground" />
                       <span className="text-sm text-muted-foreground group-hover:text-accent-foreground">
-                        {formData.image ? formData.image.name : 'Choose cover image'}
+                        {formData.image
+                          ? formData.image.name
+                          : "Choose cover image"}
                       </span>
                     </label>
                   </div>
@@ -270,7 +332,7 @@ const FileDropDialog = ({ isOpen, onClose, droppedFiles, isOnline }: {
                   <Label className="text-sm font-medium text-foreground">
                     Options
                   </Label>
-                  
+
                   <div className="space-y-3">
                     {/* Sync to Cloud */}
                     <div className="flex items-center justify-between p-3 bg-muted rounded-lg border border-border">
@@ -285,15 +347,18 @@ const FileDropDialog = ({ isOpen, onClose, droppedFiles, isOnline }: {
                             Cloud Sync
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            {isOnline ? 'Available' : 'Offline'}
+                            {isOnline ? "Available" : "Offline"}
                           </p>
                         </div>
                       </div>
                       <Checkbox
                         id="syncToCloud"
                         checked={formData.syncToCloud}
-                        onCheckedChange={(checked) => 
-                          setFormData(prev => ({ ...prev, syncToCloud: checked as boolean }))
+                        onCheckedChange={(checked) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            syncToCloud: checked as boolean,
+                          }))
                         }
                         disabled={!isOnline}
                         className="data-[state=checked]:bg-primary data-[state=checked]:border-primary"
@@ -303,7 +368,13 @@ const FileDropDialog = ({ isOpen, onClose, droppedFiles, isOnline }: {
                     {/* Favourite */}
                     <div className="flex items-center justify-between p-3 bg-muted rounded-lg border border-border">
                       <div className="flex items-center gap-3">
-                        <Heart className={`w-4 h-4 ${formData.isFavourite ? 'fill-current text-destructive' : 'text-muted-foreground'}`} />
+                        <Heart
+                          className={`w-4 h-4 ${
+                            formData.isFavourite
+                              ? "fill-current text-destructive"
+                              : "text-muted-foreground"
+                          }`}
+                        />
                         <div>
                           <p className="text-sm font-medium text-card-foreground">
                             Favourite
@@ -316,8 +387,11 @@ const FileDropDialog = ({ isOpen, onClose, droppedFiles, isOnline }: {
                       <Checkbox
                         id="isFavourite"
                         checked={formData.isFavourite}
-                        onCheckedChange={(checked) => 
-                          setFormData(prev => ({ ...prev, isFavourite: checked as boolean }))
+                        onCheckedChange={(checked) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            isFavourite: checked as boolean,
+                          }))
                         }
                         className="data-[state=checked]:bg-destructive data-[state=checked]:border-destructive"
                       />
@@ -332,14 +406,14 @@ const FileDropDialog = ({ isOpen, onClose, droppedFiles, isOnline }: {
               <Label className="text-sm font-medium text-foreground">
                 Tags
               </Label>
-              
+
               {/* Existing Tags */}
               {formData.tags.length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   {formData.tags.map((tag) => (
-                    <Badge 
-                      key={tag} 
-                      variant="secondary" 
+                    <Badge
+                      key={tag}
+                      variant="secondary"
                       className="bg-secondary text-secondary-foreground border-0 rounded-full px-3 py-1 flex items-center gap-2"
                     >
                       {tag}
@@ -353,7 +427,7 @@ const FileDropDialog = ({ isOpen, onClose, droppedFiles, isOnline }: {
                   ))}
                 </div>
               )}
-              
+
               {/* Add Tag Input */}
               <div className="flex gap-2">
                 <Input
@@ -361,7 +435,7 @@ const FileDropDialog = ({ isOpen, onClose, droppedFiles, isOnline }: {
                   onChange={(e) => setNewTag(e.target.value)}
                   placeholder="Add a tag..."
                   className="flex-1 border-border rounded-lg h-10 focus:border-ring focus:ring-ring/20 bg-background"
-                  onKeyPress={(e) => e.key === 'Enter' && addTag()}
+                  onKeyPress={(e) => e.key === "Enter" && addTag()}
                 />
                 <Button
                   onClick={addTag}
@@ -379,14 +453,14 @@ const FileDropDialog = ({ isOpen, onClose, droppedFiles, isOnline }: {
 
         {/* Footer */}
         <div className="flex justify-end gap-3 p-6 pb-0 pt-4 border-t border-border">
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             onClick={onClose}
             className="px-6 border-border hover:bg-accent"
           >
             Cancel
           </Button>
-          <Button 
+          <Button
             onClick={handleSubmit}
             disabled={!formData.title.trim() || !formData.file}
             className="px-6 bg-primary hover:bg-primary/90 text-primary-foreground border-0 shadow-sm"
@@ -412,12 +486,12 @@ export function BookAddProvider({ children }: { children: React.ReactNode }) {
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
 
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
 
     return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
     };
   }, []);
 
@@ -435,19 +509,22 @@ export function BookAddProvider({ children }: { children: React.ReactNode }) {
     setDroppedFiles([]);
   }, []);
 
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!isDragging) {
-      setIsDragging(true);
-      setShowDropMessage(true);
-    }
-  }, [isDragging]);
+  const handleDragOver = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!isDragging) {
+        setIsDragging(true);
+        setShowDropMessage(true);
+      }
+    },
+    [isDragging]
+  );
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     // Only hide if we're leaving the drop zone entirely
     if (!e.currentTarget.contains(e.relatedTarget as Node)) {
       setIsDragging(false);
@@ -455,23 +532,26 @@ export function BookAddProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-    setShowDropMessage(false);
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragging(false);
+      setShowDropMessage(false);
 
-    const files = Array.from(e.dataTransfer.files);
-    if (files.length > 0) {
-      openDialog(files);
-    }
-  }, [openDialog]);
+      const files = Array.from(e.dataTransfer.files);
+      if (files.length > 0) {
+        openDialog(files);
+      }
+    },
+    [openDialog]
+  );
 
   const contextValue: BookAddContextType = {
     openDialog,
     closeDialog,
     isDialogOpen: dialogOpen,
-    isOnline
+    isOnline,
   };
 
   return (
@@ -483,7 +563,7 @@ export function BookAddProvider({ children }: { children: React.ReactNode }) {
         className="relative w-full h-full"
       >
         {children}
-        
+
         {/* Drop Overlay with Ripple Animation */}
         {showDropMessage && (
           <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center">
@@ -495,12 +575,12 @@ export function BookAddProvider({ children }: { children: React.ReactNode }) {
                   className="absolute w-32 h-32 border-2 border-primary/30 rounded-full animate-ping"
                   style={{
                     animationDelay: `${i * 0.5}s`,
-                    animationDuration: '2s'
+                    animationDuration: "2s",
                   }}
                 />
               ))}
             </div>
-            
+
             {/* Central Drop Zone */}
             <div className="relative text-center space-y-6 p-12 rounded-2xl bg-card/95 backdrop-blur-md border border-border shadow-2xl animate-in fade-in zoom-in duration-300">
               {/* Animated Upload Icon */}
@@ -510,7 +590,7 @@ export function BookAddProvider({ children }: { children: React.ReactNode }) {
                   <Upload className="w-10 h-10 text-accent-foreground animate-bounce" />
                 </div>
               </div>
-              
+
               {/* Text Content */}
               <div className="space-y-2">
                 <h2 className="text-2xl font-semibold text-card-foreground">
@@ -520,7 +600,7 @@ export function BookAddProvider({ children }: { children: React.ReactNode }) {
                   Release to add them to your library
                 </p>
               </div>
-              
+
               {/* Animated Dots */}
               <div className="flex justify-center gap-1">
                 {[...Array(3)].map((_, i) => (
@@ -529,7 +609,7 @@ export function BookAddProvider({ children }: { children: React.ReactNode }) {
                     className="w-2 h-2 bg-primary rounded-full animate-bounce"
                     style={{
                       animationDelay: `${i * 0.2}s`,
-                      animationDuration: '1s'
+                      animationDuration: "1s",
                     }}
                   />
                 ))}
@@ -551,12 +631,12 @@ export function BookAddProvider({ children }: { children: React.ReactNode }) {
           .scrollbar-thin {
             scrollbar-width: thin;
           }
-          
+
           .scrollbar-thumb-muted::-webkit-scrollbar-thumb {
             background-color: hsl(var(--muted));
             border-radius: 0.375rem;
           }
-          
+
           .scrollbar-thin::-webkit-scrollbar {
             width: 6px;
           }
@@ -571,10 +651,7 @@ export function AddBookButton() {
   const { openDialog } = useBookAdd();
 
   return (
-    <Button 
-      onClick={() => openDialog()}
-      className="flex items-center gap-2"
-    >
+    <Button onClick={() => openDialog()} className="flex items-center gap-2">
       <Plus className="w-4 h-4" />
       Add Book
     </Button>
