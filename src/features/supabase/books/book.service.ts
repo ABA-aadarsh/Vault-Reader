@@ -20,7 +20,8 @@ async function uploadBook(
 ) {
   const docId = uuidv4();
   const fileId = uuidv4();
-  const imageId = uuidv4();
+  let imageId: string | null = null;
+  if (image) imageId = uuidv4();
 
   const user = await AuthAPI.getCurrentUser();
   if (!user) {
@@ -52,7 +53,6 @@ async function uploadBook(
       tags,
       fileId: fileId,
       userId: userId,
-
       isFavourite,
       imageId,
     });
@@ -202,6 +202,57 @@ async function getlocalBook(fileId: string) {
   }
 }
 
+async function downloadBook(docId: string) {
+  const user = await AuthAPI.getCurrentUser();
+  if (!user) {
+    throw new Error("User not found");
+  }
+  const userId = user.id;
+
+  // Get the metadata to find the file
+  const { data: metadata, error: metadataError } = await supabase
+    .from("metadata")
+    .select("file_id, imageId")
+    .eq("id", docId)
+    .eq("user_id", userId) // Ensure user owns the book
+    .single();
+
+  if (metadataError || !metadata) {
+    throw new Error("Book not found or unauthorized");
+  }
+
+  // Download the file from storage
+  const { data: fileData, error: fileError } = await supabase.storage
+    .from(FILE_NAME)
+    .download(metadata.file_id);
+
+  if (fileError) {
+    throw new Error(`Failed to download book: ${fileError.message}`);
+  }
+
+  // store in indexdb
+  await db.files.add({
+    fileId: metadata.file_id,
+    file: fileData,
+  });
+
+  //download image form storage
+  if (!metadata.imageId) {
+    const { data: imageData, error: imageError } = await supabase.storage
+      .from(IMAGE_NAME)
+      .download(metadata.imageId);
+
+    if (imageError) {
+      throw new Error(`Failed to download book: ${imageError.message}`);
+    }
+  }
+  // store in indexdb
+  await db.image.add({
+    imageId: metadata.imageId,
+    image: fileData,
+  });
+}
+
 async function deleteBook(docId: string) {
   const {
     data: { user },
@@ -299,6 +350,7 @@ const BooksAPI = {
   listLocalBooks,
   listCloudBooks,
   getlocalBook,
+  downloadBook,
 };
 
 export default BooksAPI;

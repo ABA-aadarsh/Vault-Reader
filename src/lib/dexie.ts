@@ -3,7 +3,7 @@ import Dexie, { Table } from "dexie";
 export interface FileEntry {
   id?: number;
   fileId: string;
-  file: File;
+  file: Blob;
 }
 
 export interface MetadataEntry {
@@ -17,7 +17,7 @@ export interface MetadataEntry {
   progress?: number;
   status?: string[];
   isFavourite: boolean;
-  imageId?: string;
+  imageId?: string | null;
   verified?: string;
   origin?: string;
   note?: string;
@@ -25,8 +25,8 @@ export interface MetadataEntry {
 
 export interface ImageEntry{
     id?: number;
-  imageId: string;
-  image: File;
+  imageId: string | null;
+  image: Blob;
 }
 
 class BookVaultDexie extends Dexie {
