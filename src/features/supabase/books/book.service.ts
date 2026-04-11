@@ -100,7 +100,8 @@ async function uploadBook(
           user_id: userId,
           isFavourite,
           imageId,
-          Verified: true,
+          verified: true,
+          version: 1,
         })
         .select()
         .single();

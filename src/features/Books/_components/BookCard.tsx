@@ -11,7 +11,7 @@ export type Book = {
   tags: string[];
   fileId: string;
   fileUrl?: string;
-  version: string;
+  version?: string;
   isFavourite?: boolean;
   note?: string;
   image?: string | null;

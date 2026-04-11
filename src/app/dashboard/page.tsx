@@ -56,7 +56,7 @@ export default function Page() {
         <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
           {booksList?.map((book, i) => (
             <BookCard
-              key={book.docId}
+              key={i}
               book={book}
               type="grid"
               versionStatus={
@@ -69,7 +69,7 @@ export default function Page() {
         <div className="space-y-4">
           {booksList?.map((book, i) => (
             <BookCard
-              key={book.docId}
+              key={i}
               book={book}
               type="list"
               versionStatus={

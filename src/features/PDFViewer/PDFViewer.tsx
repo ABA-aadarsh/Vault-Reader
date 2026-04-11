@@ -31,7 +31,7 @@ interface PDFViewerProps {
 }
 
 export const PDFViewer = ({
-  fileUrl = "https://pdf.easycsit.com/notes/Introduction%20to%20Object%20Oriented%20Programming1752849860330.pdf",
+  fileUrl = "https://blvebkbikgpulnererdb.supabase.co/storage/v1/object/public/books/9bb4d83a-d9c1-4ecd-873c-c16e7b4a7d68.pdf",
   className = ""
 }: PDFViewerProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
