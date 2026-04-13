@@ -26,12 +26,13 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 ).toString();
 
 interface PDFViewerProps {
-  fileUrl?: string;
+  fileUrl: string | null;
   className?: string;
 }
 
 export const PDFViewer = ({
-  fileUrl = "https://blvebkbikgpulnererdb.supabase.co/storage/v1/object/public/books/9bb4d83a-d9c1-4ecd-873c-c16e7b4a7d68.pdf",
+  fileUrl,
+  // fileUrl = "https://blvebkbikgpulnererdb.supabase.co/storage/v1/object/public/books/9bb4d83a-d9c1-4ecd-873c-c16e7b4a7d68.pdf",
   className = ""
 }: PDFViewerProps) => {
   const containerRef = useRef<HTMLDivElement>(null);

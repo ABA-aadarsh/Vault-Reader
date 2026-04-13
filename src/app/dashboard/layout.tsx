@@ -1,7 +1,7 @@
 "use client";
 
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
-import { AppSidebar } from "./_components/SidebarContainer";
+import { AppSidebar } from "../../components/shared/SidebarContainer";
 import { SearchLauncherProvider } from "@/features/Search/provider/SearchLauncherProvider";
 import { SearchLauncher } from "@/features/Search/components/SearchLauncher";
 // Import CSS files for React-PDF
@@ -10,7 +10,7 @@ import 'react-pdf/dist/Page/AnnotationLayer.css';
 //@ts-ignore
 import 'react-pdf/dist/Page/TextLayer.css'
 
-// import {RequireAuth} from "@/features/supabase/auth/components/RequireAuth";
+import {RequireAuth} from "@/features/supabase/auth/components/RequireAuth";
 import { BookAddProvider } from "@/features/Books/provider/BookDropAddProvider";
 
 export default function RootLayout({
@@ -19,7 +19,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    // <RequireAuth>
+    <RequireAuth>
       <SearchLauncherProvider>
         <BookAddProvider>
           <SidebarProvider>
@@ -33,6 +33,6 @@ export default function RootLayout({
         </BookAddProvider>
           <SearchLauncher />
       </SearchLauncherProvider>
-    // </RequireAuth>
+    </RequireAuth>
   );
 }

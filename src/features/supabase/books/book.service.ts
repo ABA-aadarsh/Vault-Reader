@@ -30,6 +30,9 @@ async function uploadBook(
 
   const userId = user.id;
 
+  console.log({
+    file})
+
   try {
     // Upload file to local IndexedDB
     await db.files.add({
@@ -203,6 +206,22 @@ async function getlocalBook(fileId: string) {
   }
 }
 
+async function getlocalImage(imageId: string | null | undefined) {
+  if (!imageId) {
+    return null;
+  }
+  try {
+    const imageEntry = await db.image.where("imageId").equals(imageId).first();
+    return imageEntry?.image || null;
+  } catch (error) {
+    throw new Error(
+      `Failed to fetch book image: ${
+        error instanceof Error ? error.message : "Unknown error"
+      }`
+    );
+  }
+}
+
 async function downloadBook(docId: string) {
   const user = await AuthAPI.getCurrentUser();
   if (!user) {
@@ -346,12 +365,43 @@ async function updateBookMetadata(
   return data;
 }
 
+async function deleteLocalBook(docId: string) {
+  try {
+    // Get the book metadata first to find fileId and imageId
+    const book = await db.metadata.where("docId").equals(docId).first();
+
+    if (!book) {
+      throw new Error("Book not found");
+    }
+
+    // Delete file from Dexie using fileId
+    await db.files.where("fileId").equals(book.fileId).delete();
+
+    // Delete metadata using docId (unique identifier)
+    await db.metadata.where("docId").equals(docId).delete();
+
+    // Delete image if it exists
+    if (book.imageId) {
+      await db.image.where("imageId").equals(book.imageId).delete();
+    }
+  } catch (error) {
+    console.error("Error deleting local book:", error);
+    throw new Error(
+      `Failed to delete book: ${
+        error instanceof Error ? error.message : "Unknown error"
+      }`
+    );
+  }
+}
+
 const BooksAPI = {
   uploadBook,
   listLocalBooks,
   listCloudBooks,
   getlocalBook,
+  getlocalImage,
   downloadBook,
+  deleteLocalBook,
 };
 
 export default BooksAPI;

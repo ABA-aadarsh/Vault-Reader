@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Navbar } from "./_components/Navbar";
+import { Navbar } from "../components/shared/Navbar";
 import { buttonVariants } from "@/components/ui/button";
 
 export default function Home() {
