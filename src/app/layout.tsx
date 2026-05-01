@@ -28,7 +28,7 @@ export default function RootLayout({
     <html lang="en" className="dark bg-background text-foreground">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         
-        {/* diabled server workers for now it is caching the api */}
+        {/* disabled service workers for now; it is caching the API */}
         {/* <ServiceWorkerInit /> */}
         <QueryProvider>
           {children}
