@@ -482,11 +482,13 @@ export function BookAddProvider({ children }: { children: React.ReactNode }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [droppedFiles, setDroppedFiles] = useState<File[]>([]);
   const wasOnlineRef = React.useRef(navigator.onLine); // Track previous state with ref
+  const isInitialCheckRef = React.useRef(true); // Track if first network check
 
   // Monitor online status and sync on mount
   useEffect(() => {
     const check = async () => {
       const prevOnline = wasOnlineRef.current; // Read from ref (not state)
+      const isInitialCheck = isInitialCheckRef.current; // Check if this is first run
       
       if (!navigator.onLine) {
         setIsOnline(false);
@@ -505,8 +507,8 @@ export function BookAddProvider({ children }: { children: React.ReactNode }) {
         wasOnlineRef.current = true;
         console.log("app online")
         
-        // If we just came online, sync pending operations
-        if (!prevOnline) {
+        // Sync if: initial check on mount while online, OR came from offline to online
+        if (isInitialCheck || !prevOnline) {
           console.log("[BookAddProvider] ✓ Network restored, syncing...");
           try {
             await syncManager.processQueue();
@@ -515,6 +517,11 @@ export function BookAddProvider({ children }: { children: React.ReactNode }) {
             console.error("[BookAddProvider] ✗ Sync failed:", error);
             // Keep online state based on the network check above; sync can fail for non-network reasons.
           }
+        }
+        
+        // Mark initial check as done after first successful online check
+        if (isInitialCheck) {
+          isInitialCheckRef.current = false;
         }
       } catch (error) {
         console.error("Network check failed:", error);
