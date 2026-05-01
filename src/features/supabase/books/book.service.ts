@@ -226,6 +226,9 @@ async function deleteBook(docId: string) {
 
   // Delete locally
   await db.files.where("fileId").equals(book.fileId).delete();
+  if (book.imageId) {
+    await db.image.where("imageId").equals(book.imageId).delete();
+  }
   await db.metadata.where("docId").equals(docId).delete();
 
   await syncManager.queueOperation("delete", docId, {});
