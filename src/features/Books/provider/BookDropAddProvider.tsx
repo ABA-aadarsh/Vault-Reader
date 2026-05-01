@@ -30,6 +30,7 @@ import {
   CloudOff,
 } from "lucide-react";
 import BooksAPI from "@/features/supabase/books/book.service";
+import { syncManager } from "@/features/supabase/sync/syncManager";
 
 // File type interface
 interface FileData {
@@ -480,20 +481,65 @@ export function BookAddProvider({ children }: { children: React.ReactNode }) {
   const [showDropMessage, setShowDropMessage] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [droppedFiles, setDroppedFiles] = useState<File[]>([]);
+  const wasOnlineRef = React.useRef(navigator.onLine); // Track previous state with ref
 
-  // Monitor online status
+  // Monitor online status and sync on mount
   useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
+    const check = async () => {
+      const prevOnline = wasOnlineRef.current; // Read from ref (not state)
+      
+      if (!navigator.onLine) {
+        setIsOnline(false);
+        wasOnlineRef.current = false;
+        console.log("app offline")
+        return;
+      }
+      
+      try {
+        await fetch("https://www.google.com/favicon.ico", { 
+          method: 'HEAD',
+          cache: 'no-store',
+          mode: "no-cors" 
+        });
+        setIsOnline(true);
+        wasOnlineRef.current = true;
+        console.log("app online")
+        
+        // If we just came online, sync pending operations
+        if (!prevOnline) {
+          console.log("[BookAddProvider] ✓ Network restored, syncing...");
+          try {
+            await syncManager.processQueue();
+            console.log("[BookAddProvider] ✓ Sync completed");
+          } catch (error) {
+            console.error("[BookAddProvider] ✗ Sync failed:", error);
+            setIsOnline(false); // Mark offline if sync fails
+          }
+        }
+      } catch (error) {
+        console.error("Network check failed:", error);
+        setIsOnline(false);
+        wasOnlineRef.current = false;
+        console.log("app offline")
+      }
+    };
 
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
+    check();
+    
+    // These fire instantly when network changes
+    window.addEventListener('online', check);
+    window.addEventListener('offline', check);
+
+    // Fallback poll, less frequent since events cover most cases
+    const interval = setInterval(check, 30000);
 
     return () => {
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
+      window.removeEventListener('online', check);
+      window.removeEventListener('offline', check);
+      clearInterval(interval);
     };
   }, []);
+
 
   const openDialog = useCallback((files?: File[]) => {
     if (files) {
