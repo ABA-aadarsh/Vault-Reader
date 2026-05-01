@@ -513,7 +513,7 @@ export function BookAddProvider({ children }: { children: React.ReactNode }) {
             console.log("[BookAddProvider] ✓ Sync completed");
           } catch (error) {
             console.error("[BookAddProvider] ✗ Sync failed:", error);
-            setIsOnline(false); // Mark offline if sync fails
+            // Keep online state based on the network check above; sync can fail for non-network reasons.
           }
         }
       } catch (error) {
