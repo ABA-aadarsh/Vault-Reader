@@ -21,6 +21,8 @@ export interface MetadataEntry {
   verified?: string;
   origin?: string;
   note?: string;
+  syncStatus?: 'synced' | 'pending';
+  lastSyncedAt?: number;
 }
 
 export interface ImageEntry{
@@ -29,11 +31,20 @@ export interface ImageEntry{
   image: Blob;
 }
 
+export interface SyncQueueEntry {
+  id?: number;
+  type: 'create' | 'update' | 'delete';
+  docId: string;
+  payload: Record<string, any>;
+  createdAt: number;
+  attempts: number;
+}
+
 class BookVaultDexie extends Dexie {
   files!: Table<FileEntry>;
   metadata!: Table<MetadataEntry>;
   image!: Table<ImageEntry>;
- 
+  syncQueue!: Table<SyncQueueEntry>;
 
   constructor() {
     super("bookVaultDB");
@@ -41,6 +52,7 @@ class BookVaultDexie extends Dexie {
       files: "++id, fileId",
       metadata: "docId, fileId, userId, title",
       image: "++id, imageId",
+      syncQueue: "++id, docId, createdAt",
     });
   }
 }

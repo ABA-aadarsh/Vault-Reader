@@ -72,7 +72,7 @@ export const BookCard = ({
   const confirmDelete = async () => {
     try {
       setIsDeleting(true);
-      await BooksAPI.deleteLocalBook(docId);
+      await BooksAPI.deleteBook(docId);
 
       setShowDeleteDialog(false);
       if (onDeleted) {
