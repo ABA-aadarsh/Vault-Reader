@@ -500,6 +500,7 @@ export function BookAddProvider({ children }: { children: React.ReactNode }) {
     const check = async () => {
       const prevOnline = wasOnlineRef.current; // Read from ref (not state)
       const isInitialCheck = isInitialCheckRef.current; // Check if this is first run
+      
       if (!navigator.onLine) {
         setIsOnline(false);
         wasOnlineRef.current = false;
@@ -515,9 +516,9 @@ export function BookAddProvider({ children }: { children: React.ReactNode }) {
         });
         setIsOnline(true);
         wasOnlineRef.current = true;
-        console.log("app online");
-
-     // Sync if: initial check on mount while online, OR came from offline to online
+        console.log("app online")
+        
+        // Sync if: initial check on mount while online, OR came from offline to online
         if (isInitialCheck || !prevOnline) {
           console.log("[BookAddProvider] ✓ Network restored, syncing...");
          try {
@@ -529,7 +530,8 @@ export function BookAddProvider({ children }: { children: React.ReactNode }) {
             // Keep online state based on the network check above; sync can fail for non-network reasons.
           }
         }
-            // Mark initial check as done after first successful online check
+        
+        // Mark initial check as done after first successful online check
         if (isInitialCheck) {
           isInitialCheckRef.current = false;
         }

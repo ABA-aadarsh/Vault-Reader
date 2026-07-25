@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import QueryProvider from "@/provider/QueryProvider";
+import { ServiceWorkerInit } from "@/components/ServiceWorkerInit";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -28,7 +29,7 @@ export default function RootLayout({
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         
         {/* disabled service workers for now; it is caching the API */}
-        {/* <ServiceWorkerInit /> */}
+        {/* <ServiceWorkerInit />  */}
         <QueryProvider>
           {children}
         </QueryProvider>
