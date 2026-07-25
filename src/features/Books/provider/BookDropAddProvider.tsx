@@ -141,12 +141,12 @@ const FileDropDialog = ({
     };
     // Handle form submission here
     try {
-      if (!finalData.file){
+      if (!finalData.file) {
         throw new Error("File is required.");
       }
-      await  BooksAPI.uploadBook(
+      await BooksAPI.uploadBook(
         finalData.title,
-        finalData.author || '',
+        finalData.author || "",
         finalData.tags,
         finalData.isFavourite,
         finalData.image,
@@ -154,6 +154,17 @@ const FileDropDialog = ({
         finalData.syncToCloud,
       );
       console.log("Book data submitted:", finalData);
+
+         // If online and syncing to cloud, process queue immediately
+    if (isOnline && finalData.syncToCloud) {
+      console.log("[BookAddProvider] ✓ Book added while online, syncing...");
+      try {
+        await syncManager.processQueue();
+        console.log("[BookAddProvider] ✓ Book synced to cloud");
+      } catch (error) {
+        console.error("[BookAddProvider] ✗ Sync failed:", error);
+      }
+    }
     } catch (error) {
       console.error("Book upload failed:", error);
     }
@@ -482,64 +493,69 @@ export function BookAddProvider({ children }: { children: React.ReactNode }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [droppedFiles, setDroppedFiles] = useState<File[]>([]);
   const wasOnlineRef = React.useRef(navigator.onLine); // Track previous state with ref
+ const isInitialCheckRef = React.useRef(true); // Track if first network check
 
   // Monitor online status and sync on mount
   useEffect(() => {
     const check = async () => {
       const prevOnline = wasOnlineRef.current; // Read from ref (not state)
-      
+      const isInitialCheck = isInitialCheckRef.current; // Check if this is first run
       if (!navigator.onLine) {
         setIsOnline(false);
         wasOnlineRef.current = false;
-        console.log("app offline")
+        console.log("app offline");
         return;
       }
-      
+
       try {
-        await fetch("https://www.google.com/favicon.ico", { 
-          method: 'HEAD',
-          cache: 'no-store',
-          mode: "no-cors" 
+        await fetch("https://www.google.com/favicon.ico", {
+          method: "HEAD",
+          cache: "no-store",
+          mode: "no-cors",
         });
         setIsOnline(true);
         wasOnlineRef.current = true;
-        console.log("app online")
-        
-        // If we just came online, sync pending operations
-        if (!prevOnline) {
+        console.log("app online");
+
+     // Sync if: initial check on mount while online, OR came from offline to online
+        if (isInitialCheck || !prevOnline) {
           console.log("[BookAddProvider] ✓ Network restored, syncing...");
-          try {
-            await syncManager.processQueue();
+         try {
+            await syncManager.pullFromCloud();
+            await syncManager.processQueue(); 
             console.log("[BookAddProvider] ✓ Sync completed");
           } catch (error) {
             console.error("[BookAddProvider] ✗ Sync failed:", error);
             // Keep online state based on the network check above; sync can fail for non-network reasons.
           }
         }
+            // Mark initial check as done after first successful online check
+        if (isInitialCheck) {
+          isInitialCheckRef.current = false;
+        }
       } catch (error) {
         console.error("Network check failed:", error);
         setIsOnline(false);
         wasOnlineRef.current = false;
-        console.log("app offline")
+        console.log("app offline");
       }
     };
 
     check();
-    
+
     // These fire instantly when network changes
-    window.addEventListener('online', check);
-    window.addEventListener('offline', check);
+    window.addEventListener("online", check);
+    window.addEventListener("offline", check);
 
     // Fallback poll, less frequent since events cover most cases
     const interval = setInterval(check, 30000);
 
     return () => {
-      window.removeEventListener('online', check);
-      window.removeEventListener('offline', check);
+      window.removeEventListener("online", check);
+      window.removeEventListener("offline", check);
       clearInterval(interval);
     };
   }, []);
-
 
   const openDialog = useCallback((files?: File[]) => {
     if (files) {
@@ -564,7 +580,7 @@ export function BookAddProvider({ children }: { children: React.ReactNode }) {
         setShowDropMessage(true);
       }
     },
-    [isDragging]
+    [isDragging],
   );
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
@@ -590,7 +606,7 @@ export function BookAddProvider({ children }: { children: React.ReactNode }) {
         openDialog(files);
       }
     },
-    [openDialog]
+    [openDialog],
   );
 
   const contextValue: BookAddContextType = {

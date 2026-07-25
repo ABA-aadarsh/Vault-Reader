@@ -32,6 +32,18 @@ class SyncManager {
       });
 
       console.log(`[SyncManager] Queued ${type} operation for ${docId}`);
+
+          // NEW: If online, sync immediately
+    if (navigator.onLine) {
+      console.log(`[SyncManager] Online detected, syncing immediately...`);
+      try {
+        await this.processQueue();
+        console.log(`[SyncManager] Immediate sync completed`);
+      } catch (error) {
+        console.error(`[SyncManager] Immediate sync failed, will retry later:`, error);
+        // It's queued, so user can retry when online
+      }
+    }
     } catch (error) {
       console.error("[SyncManager] Error queuing operation:", error);
       throw error;
@@ -280,6 +292,162 @@ private async _syncDelete(docId: string, userId: string) {
     throw error;
   }
 }
+  /**
+   * Pull all books from cloud and sync to local storage
+   * Handles updates and new books with timestamp comparison
+   */
+  async pullFromCloud() {
+    try {
+      const user = await AuthAPI.getCurrentUser();
+      // console.log("[SyncManager] Checking for cloud updates for user:", user?.id);
+      if (!user) {
+        console.log("[SyncManager] No user, skipping pull from cloud");
+        return;
+      }
+
+      console.log("[SyncManager] Pulling books from cloud...");
+
+      // Fetch all books for this user from cloud
+      const { data: cloudBooks, error } = await supabase
+        .from("metadata")
+        .select("*")
+        .eq("user_id", user.id);
+        console.log(`[SyncManager] Fetched ${cloudBooks?.length || 0} books from cloud`);
+      if (error) {
+        throw new Error(`Failed to fetch cloud books: ${error.message}`);
+      }
+
+      if (!cloudBooks || cloudBooks.length === 0) {
+        console.log("[SyncManager] No books in cloud");
+        return;
+      }
+
+      // Get local books and pending operations
+      const localBooks = await db.metadata.toArray();
+      const localBookIds = new Map(localBooks.map(b => [b.docId, b]));
+      const pendingOps = await db.syncQueue.toArray();
+      const pendingDocIds = new Set(pendingOps.map(op => op.docId));
+
+      let newBooksCount = 0;
+      let updatedBooksCount = 0;
+
+      // For each cloud book, check if it exists locally
+      for (const cloudBook of cloudBooks) {
+        const localBook = localBookIds.get(cloudBook.id);
+
+        if (localBook) {
+          // Book exists locally - check if it has pending edits
+          if (pendingDocIds.has(cloudBook.id)) {
+            console.log(`[SyncManager] ⏸️ Skipping ${cloudBook.id} (has pending edits)`);
+            continue;
+          }
+
+          // Compare timestamps - only update if cloud is newer
+          const cloudUpdated = cloudBook.updated_at 
+            ? new Date(cloudBook.updated_at).getTime() 
+            : 0;
+          const localUpdated = localBook.lastSyncedAt || 0;
+
+          if (cloudUpdated <= localUpdated) {
+            // Local is same or newer, skip
+            continue;
+          }
+
+          // Cloud is newer - update metadata only (keep local file)
+          console.log(`[SyncManager] 🔄 Updating ${cloudBook.id} from cloud`);
+          await db.metadata.where("docId").equals(cloudBook.id).modify({
+            title: cloudBook.title,
+            author: cloudBook.author,
+            tags: cloudBook.tags || [],
+            isFavourite: cloudBook.isFavourite || false,
+            lastSyncedAt: Date.now(),
+          });
+          updatedBooksCount++;
+          continue;
+        }
+
+        // New book not in local - download it
+        try {
+          // Download file from cloud storage
+          let fileBlob = null;
+          if (cloudBook.file_id) {
+            const fileExtension = "pdf"; // Match upload extension
+            const fileName = `${cloudBook.file_id}.${fileExtension}`;
+            
+            const { data: fileData, error: fileError } = await supabase.storage
+              .from(FILE_NAME)
+              .download(fileName);
+
+            if (fileError) {
+              console.warn(`[SyncManager] Failed to download file ${fileName}: ${fileError.message}`);
+              continue;
+            }
+            fileBlob = fileData;
+          }
+
+          // Download image from cloud storage if exists
+          let imageBlob = null;
+          if (cloudBook.imageId) {
+            const imageExtension = "png"; // TODO: get the actual extension // Match upload extension
+            const imageName = `${cloudBook.imageId}.${imageExtension}`;
+            
+            const { data: imageData, error: imageError } = await supabase.storage
+              .from(IMAGE_NAME)
+              .download(imageName);
+
+            if (imageError) {
+              console.warn(`[SyncManager] Failed to download image ${imageName}: ${imageError.message}`);
+              // Don't fail, image is optional
+            } else {
+              imageBlob = imageData;
+            }
+          }
+
+          // Store file locally
+          if (fileBlob) {
+            await db.files.add({
+              fileId: cloudBook.file_id,
+              file: fileBlob,
+            });
+          }
+
+          // Store image locally
+          if (imageBlob && cloudBook.imageId) {
+            await db.image.add({
+              imageId: cloudBook.imageId,
+              image: imageBlob,
+            });
+          }
+
+          // Store metadata locally
+          await db.metadata.add({
+            docId: cloudBook.id,
+            title: cloudBook.title,
+            author: cloudBook.author,
+            tags: cloudBook.tags || [],
+            fileId: cloudBook.file_id,
+            userId: user.id,
+            isFavourite: cloudBook.isFavourite || false,
+            imageId: cloudBook.imageId || null,
+            syncStatus: "synced",
+            lastSyncedAt: Date.now(),
+          });
+
+          newBooksCount++;
+          console.log(`[SyncManager] ✓ Synced cloud book: ${cloudBook.title}`);
+        } catch (error) {
+          console.error(`[SyncManager] Failed to sync cloud book ${cloudBook.id}:`, error);
+          // Continue with next book
+        }
+      }
+
+      console.log(`[SyncManager] ✓ Pull completed: ${newBooksCount} new books, ${updatedBooksCount} updated`);
+    } catch (error) {
+      console.error("[SyncManager] Error pulling from cloud:", error);
+      throw error;
+    }
+  }
+
   /**
    * Get count of pending operations
    */
