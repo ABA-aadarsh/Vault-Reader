@@ -38,14 +38,23 @@ Build a **cloud-coordinated multi-master**, offline-first sync system for a **si
 | Notes | One note document per book |
 | Engine | Single `SyncEngine.runCycle`: push → pull → file planner |
 | Local DB | Per-user Dexie: `bookVaultDB:${userId}` |
-| Progress | Per-device default; global “sync progress” off by default; max page/percent when on |
-| Conflict UX | Status chip + conflict inbox |
+| Progress | Per-device default; global "sync progress" off by default; max page/percent when on |
+| Conflict UX | Status chip + conflict inbox (sheet/modal, not full page) |
 | Auth | First login required; cached session; offline local use; banner if expired |
 | Expired session | Full local use; block sync/download/promote |
 | Transport | Poll + lifecycle triggers |
 | Errors | Classified + exponential backoff |
-| Storage | `{userId}/{bookId}/{fileId}.pdf` + RLS |
-| Migration | Clean break |
+| Storage | Reuse existing `books` + `image` buckets; path prefix `{userId}/{bookId}/{fileId}.pdf` + RLS |
+| Migration | Clean break; Supabase CLI at repo root |
+| CAS | Single upsert SQL RPC per entity (books, notes, reading_states); error on collision when `baseRevision = 0` |
+| Tags merge | Auto set-union when both devices change tags |
+| Image format | Always `.png` for covers |
+| Device ID | Omit `updated_by_device_id` from cloud schema for v1 |
+| Verified field | Drop from schema (hardcoded to true, serves no purpose) |
+| Tombstone GC | Defer to Phase 8 |
+| Recently deleted | Silent tombstones only; no UI in v1 |
+| Orphan GC | Delete storage files with DB row in same operation |
+| PDF auto-download | Default: `never` (manual open to download) |
 
 ---
 
@@ -106,8 +115,8 @@ src/features/supabase/
 ### 5.3 Identity
 
 - `userId` from Supabase auth (cached for offline).
-- `deviceId` UUID in `localStorage` (stable per browser profile).
-- Every mutation stamps `updatedAt`, `updatedByDeviceId`, bumps local `revision` intent via `baseRevision` tracking.
+- `deviceId` UUID in `localStorage` (stable per browser profile) — **v2; omitted from cloud schema for v1.**
+- Every mutation stamps `updatedAt`, bumps local `revision` intent via `baseRevision` tracking.
 
 ---
 
@@ -191,7 +200,7 @@ file_id, image_id
 revision int NOT NULL DEFAULT 1
 deleted_at timestamptz NULL
 updated_at timestamptz
-updated_by_device_id text
+updated_at timestamptz
 created_at timestamptz
 ```
 
@@ -203,7 +212,7 @@ user_id uuid NOT NULL
 body text
 revision int
 deleted_at timestamptz NULL
-updated_at, updated_by_device_id, created_at
+updated_at, created_at
 ```
 
 **reading_states** (only used when client enables progress sync)
@@ -212,7 +221,7 @@ updated_at, updated_by_device_id, created_at
 book_id + user_id PK
 page int, percent real
 revision int
-updated_at, updated_by_device_id
+updated_at
 ```
 
 Indexes: `(user_id, updated_at, id)` for pull; partial index where `deleted_at IS NOT NULL` for GC.
@@ -228,14 +237,14 @@ RETURNING *;
 -- 0 rows => conflict
 ```
 
-Prefer a small RPC `cas_update_book(...)` for atomicity.
+Prefer a single upsert RPC `cas_upsert_book(...)` for atomicity (see CAS pattern above).
 
 ### 6.3 Storage
 
-- `pdfs/{userId}/{bookId}/{fileId}.pdf`
-- `covers/{userId}/{bookId}/{imageId}.ext`
-- RLS: path first folder = `auth.uid()`
-- Upload order: blob(s) → DB row; orphans GC’d by periodic job / next cycle sweep
+- Reuse existing `books` + `image` buckets
+- Path prefix: `{userId}/{bookId}/{fileId}.pdf` / `{userId}/{bookId}/{imageId}.png`
+- RLS: per-operation policies; path first folder = `auth.uid()`
+- Upload order: blob(s) -> DB row; orphans deleted with DB row in same operation
 
 ---
 
@@ -287,7 +296,7 @@ Every user action:
 - Cloud book delete: set local `deletedAt`, bump pending delete op, hide from library UI (or “Recently deleted”).
 - Push: CAS soft-delete on cloud (`deleted_at`, `revision++`).
 - Pull tombstone → other devices soft-delete.
-- Undo &lt; 30d: clear `deletedAt`, push restore CAS.
+- Undo < 30d: clear `deletedAt`, push restore CAS.
 - After 30d: hard purge row + storage (server cron or edge function).
 - **Remove download:** clear local file blob, `fileSyncStatus: not_downloaded`; no cloud change.
 - **Update vs delete conflict:** inbox — Restore vs Confirm delete.
@@ -360,15 +369,27 @@ While conflict open: pause sync **only for that entity**; rest continues.
 
 ## 11. Implementation phases (granular)
 
-### Phase 0 — Spec freeze & clean break
+### Phase 0 - Spec freeze & clean break *(completed)*
 
 0.1 Document this plan as `plan.md` *(done)*
-0.2 Inventory env buckets/tables; schedule wipe of old `metadata` + flat storage
-0.3 Add `/supabase/migrations/0001_sync_v1.sql` (books, notes, reading_states, RLS, indexes, CAS RPCs)
-0.4 Storage buckets + RLS policies for prefixed paths
-0.5 Follow-ups list in plan (below) — no more blocking questions
+0.2 ~~Inventory env buckets/tables; schedule wipe of old `metadata` + flat storage~~ *(done — wipe everything: table + storage)*
+0.3 Add `/supabase/migrations/0001_sync_v1.sql` (books, notes, reading_states, RLS, indexes, CAS RPCs) — **Supabase CLI at repo root**
+0.4 Storage buckets + RLS policies for prefixed paths — **reuse existing `books` + `image` buckets**
+0.5 ~~All blocking questions resolved~~ *(resolved in grilling session)*
 
-**Exit:** empty cloud schema ready; team agrees wipe.
+**Decisions locked for Phase 0:**
+- Wipe: everything (metadata table + both storage buckets)
+- Migration: Supabase CLI, `supabase/migrations/0001_sync_v1.sql`
+- CAS: single upsert RPC per entity; error on insert collision (`baseRevision = 0` + row exists)
+- Storage: reuse `books`/`image` buckets; per-operation RLS policies; path prefix = `auth.uid()`
+- Include `reading_states` table (empty, ready for Phase 10)
+- Omit `updated_by_device_id` for v1; drop `verified` field
+- Always `.png` for cover images
+- Tags: auto set-union; conflicts: sheet/modal; recently deleted: silent tombstones only
+- Tombstone GC: defer to Phase 8; orphan GC: delete with DB row
+- PDF auto-download default: `never`
+
+**Exit:** Done. Cloud schema applied; old metadata dropped; storage cleanup pending via dashboard.
 
 ---
 
@@ -495,6 +516,7 @@ While conflict open: pause sync **only for that entity**; rest continues.
 10.3 Failed op Retry/Discard UI on book
 10.4 Empty/error states for download failures
 10.5 Performance: pull pagination, outbox batch limits
+10.6 Max PDF size / storage quota messaging (deferred from follow-ups; still open)
 
 **Exit:** settings complete; no stuck failed ops without UI.
 
@@ -523,7 +545,7 @@ While conflict open: pause sync **only for that entity**; rest continues.
 
 ---
 
-## 12. Write–write scenarios (worked examples)
+## 12. Write—write scenarios (worked examples)
 
 1. **A edits title, B edits tags (same base rev)**  
    Both push: first wins rev N+1; second CAS fails → auto field-merge → push merged at N+1 base.
@@ -574,22 +596,7 @@ While conflict open: pause sync **only for that entity**; rest continues.
 
 ---
 
-## 14. Follow-up questions (non-blocking; resolve during phases)
-
-1. Recently deleted UI in v1 or only silent tombstones?
-2. Auto-download PDFs default: `never` or `wifi`? (Web wifi detection limited.)
-3. Max PDF size / storage quota messaging?
-4. CAS via raw Supabase update vs security definer RPC?
-5. Tombstone GC: pg_cron vs external?
-6. Should tags merge as set-union always when both changed?
-7. Conflict inbox: full page vs sheet?
-8. Keep `verified` / Open Library fields in book meta?
-9. Image format detection vs always png?
-10. Do we need export/backup before wipe for any dev machines?
-
----
-
-## 15. Success criteria
+## 14. Success criteria
 
 - Two devices, flaky network: library meta/notes converge without silent loss.
 - Deletes propagate within one successful cycle after online.
@@ -600,7 +607,7 @@ While conflict open: pause sync **only for that entity**; rest continues.
 
 ---
 
-## 16. Reference: existing code to replace
+## 15. Reference: existing code to replace
 
 | Area | Current | Target |
 |------|---------|--------|
