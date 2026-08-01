@@ -1,17 +1,32 @@
 "use client"
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useState } from 'react'
 import { supabase } from '../../index'
-import type { Session } from '@supabase/supabase-js'
+import type { Session, User } from '@supabase/supabase-js'
 
 interface RequireAuthProps {
   children: React.ReactNode
   redirectTo?: string
 }
 
+interface AuthContextValue {
+  user: User
+  session: Session
+}
+
+const AuthContext = createContext<AuthContextValue | null>(null)
+
+export function useAuth(): AuthContextValue {
+  const ctx = useContext(AuthContext)
+  if (!ctx) {
+    throw new Error("useAuth must be used within RequireAuth")
+  }
+  return ctx
+}
+
 export const RequireAuth = ({ children, redirectTo = '/signin' }: RequireAuthProps) => {
   const router = useRouter()
-  const [session, setSession] = useState<Session | null>(null)
+  const [auth, setAuth] = useState<AuthContextValue | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -20,7 +35,7 @@ export const RequireAuth = ({ children, redirectTo = '/signin' }: RequireAuthPro
       if (!data.session) {
         router.replace(redirectTo)
       } else {
-        setSession(data.session)
+        setAuth({ user: data.session.user, session: data.session })
       }
       setLoading(false)
     }
@@ -28,8 +43,10 @@ export const RequireAuth = ({ children, redirectTo = '/signin' }: RequireAuthPro
     init()
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session)
-      if (!session) {
+      if (session) {
+        setAuth({ user: session.user, session })
+      } else {
+        setAuth(null)
         router.replace(redirectTo)
       }
     })
@@ -40,7 +57,11 @@ export const RequireAuth = ({ children, redirectTo = '/signin' }: RequireAuthPro
   }, [router, redirectTo])
 
   if (loading) return <div className="p-4">Loading...</div>
-  if (!session) return null
+  if (!auth) return null
 
-  return <>{children}</>
+  return (
+    <AuthContext.Provider value={auth}>
+      {children}
+    </AuthContext.Provider>
+  )
 }

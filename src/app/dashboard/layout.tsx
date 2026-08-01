@@ -10,16 +10,15 @@ import 'react-pdf/dist/Page/AnnotationLayer.css';
 //@ts-ignore
 import 'react-pdf/dist/Page/TextLayer.css'
 
-import {RequireAuth} from "@/features/supabase/auth/components/RequireAuth";
+import {RequireAuth, useAuth} from "@/features/supabase/auth/components/RequireAuth";
 import { BookAddProvider } from "@/features/Books/provider/BookDropAddProvider";
+import { UserDbProvider } from "@/lib/dexie/db";
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+function DashboardContent({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+
   return (
-    <RequireAuth>
+    <UserDbProvider userId={user.id}>
       <SearchLauncherProvider>
         <BookAddProvider>
           <SidebarProvider>
@@ -31,8 +30,20 @@ export default function RootLayout({
             </SidebarInset>
           </SidebarProvider>
         </BookAddProvider>
-          <SearchLauncher />
+        <SearchLauncher />
       </SearchLauncherProvider>
+    </UserDbProvider>
+  );
+}
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <RequireAuth>
+      <DashboardContent>{children}</DashboardContent>
     </RequireAuth>
   );
 }

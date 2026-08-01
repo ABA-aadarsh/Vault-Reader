@@ -1,4 +1,4 @@
-# Vault Reader — Sync Architecture Plan
+﻿# Vault Reader — Sync Architecture Plan
 
 ## 1. Goal
 
@@ -393,19 +393,45 @@ While conflict open: pause sync **only for that entity**; rest continues.
 
 ---
 
-### Phase 1 — Local foundation
+### Phase 1 — Local foundation *(completed)*
 
-1.1 Dexie factory `openUserDb(userId)` / `closeUserDb()`
-1.2 Schema v1 tables (books, notes, readingState, files, images, outbox, conflicts, syncState)
-1.3 On login: open DB; on logout: close
-1.4 Remove global `bookVaultDB` singleton usage
-1.5 Domain types + mappers
-1.6 Unit tests for schema open/close (if test runner added this phase or next)
+1.1 Dexie factory `openUserDb(userId)` / `closeUserDb()` *(done)*
+1.2 Schema v1 tables (books, notes, readingState, files, images, outbox, conflicts, syncState) *(done)*
+1.3 On login: open DB; on logout: close *(done)*
+1.4 Remove global `bookVaultDB` singleton usage *(done)*
+1.5 Domain types + mappers *(done)*
+1.6 Unit tests — deferred to Phase 11
 
-**Exit:** two accounts on one browser cannot see each other’s data.
+**Decisions locked for Phase 1 (from grilling session):**
+- Dexie factory: React Context provider (`UserDbProvider` + `useDb()` hook)
+- Schema migration: Clean break — delete old DB, create fresh with new schema
+- Provider integration: `UserDbProvider` nested inside `RequireAuth` via `DashboardContent` wrapper
+- Logout behavior: Close DB on provider unmount (React lifecycle); no changes to `AuthAPI.signout()`
+- Domain types: Separate from Dexie types, with mappers (`src/lib/domain.ts`, `src/lib/mappers.ts`)
+- File structure: `src/lib/dexie/` directory (`db.ts`, `schema.ts`, `types.ts`, `index.ts`)
+- Transition: Big bang — all consumers refactored in Phase 1 (book.service.ts, syncManager.ts, hooks)
+- Domain fields: Expose all sync fields on domain types
+- Unit tests: Defer to Phase 11
+- RequireAuth: Extended with `AuthContext` + `useAuth()` hook to expose userId
+
+**Files created/modified:**
+- `src/lib/dexie/schema.ts` — Dexie class with per-user DB name
+- `src/lib/dexie/types.ts` — Dexie entry interfaces
+- `src/lib/dexie/db.ts` — Factory, context provider, hooks
+- `src/lib/dexie/index.ts` — Re-exports
+- `src/lib/domain.ts` — Domain types (Book, Note, ReadingState)
+- `src/lib/mappers.ts` — Dexie ↔ domain conversion
+- `src/features/supabase/auth/components/RequireAuth.tsx` — Added AuthContext
+- `src/app/dashboard/layout.tsx` — Added UserDbProvider wrapper
+- `src/features/supabase/books/book.service.ts` - Rewritten for new schema
+- `src/features/supabase/sync/syncManager.ts` - Rewritten for new schema
+- `src/features/Books/hooks/useLocalBookList.ts` — Updated types
+- `src/features/Books/hooks/useCloudBookList.ts` — Updated types
+- `src/lib/dexie.ts` — Deleted (old global singleton)
+
+**Exit:** two accounts on one browser cannot see each other's data.
 
 ---
-
 ### Phase 2 — Local repository API (no cloud)
 
 2.1 `BooksRepo`: create (local|cloud flag), list (exclude deleted), get, update meta, soft delete, restore, hard purge local

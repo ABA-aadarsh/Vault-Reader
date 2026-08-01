@@ -1,11 +1,8 @@
-import { createClient } from "@supabase/supabase-js";
-import { db } from "@/lib/dexie"; // your Dexie IndexedDB setup
 import { v4 as uuidv4 } from "uuid";
 import { supabase } from "../index";
 import AuthAPI from "../auth/auth.service";
-import { Verified } from "lucide-react";
-import { COMMON_STATE_CONFIG_EXTENSIONS } from "@mdxeditor/editor";
-import { syncManager } from "../sync/syncManager";
+import { getDb } from "@/lib/dexie/db";
+import type { BookEntry, NoteEntry, FileEntry, ImageEntry } from "@/lib/dexie/types";
 
 const FILE_NAME = process.env.NEXT_PUBLIC_SUPABASE_BUCKET_FILE_NAME!;
 const IMAGE_NAME = process.env.NEXT_PUBLIC_SUPABASE_BUCKET_IMAGE_NAME!;
@@ -19,6 +16,7 @@ async function uploadBook(
   file: File,
   syncToCloud: boolean,
 ) {
+  const db = getDb();
   const docId = uuidv4();
   const fileId = uuidv4();
   let imageId: string | null = null;
@@ -29,57 +27,64 @@ async function uploadBook(
     throw new Error("User not found");
   }
 
-  const userId = user.id;
-
-  console.log({
-    file,
-  });
+  const now = Date.now();
 
   try {
-    // Upload file to local IndexedDB
     await db.files.add({
       fileId,
       file,
     });
 
-    //upload image to local indexdb
-    if (image) {
-      await db.image.add({
+    if (image && imageId) {
+      await db.images.add({
         imageId,
         image,
       });
     }
 
-    // Upload metadata to local IndexedDB
-    await db.metadata.add({
-      docId: docId,
+    await db.books.add({
+      id: docId,
       title,
       author,
       tags,
-      fileId: fileId,
-      userId: userId,
-      isFavourite,
+      fileId,
       imageId,
+      isFavourite,
+      syncScope: syncToCloud ? "cloud" : "local",
+      revision: 0,
+      baseRevision: 0,
+      deletedAt: null,
+      fileSyncStatus: "present",
+      coverSyncStatus: image ? "present" : "not_downloaded",
       syncStatus: syncToCloud ? "pending" : "synced",
+      updatedAt: now,
+      updatedByDeviceId: "",
     });
 
     if (syncToCloud) {
-      // Queue the operation for syncing instead of direct cloud write
-      await syncManager.queueOperation("create", docId, {
-        title,
-        author,
-        tags,
-        fileId,
-        isFavourite,
-        imageId,
+      await db.outbox.add({
+        entityType: "book",
+        entityId: docId,
+        op: "upsert",
+        payload: {
+          title,
+          author,
+          tags,
+          fileId,
+          isFavourite,
+          imageId,
+        },
+        baseRevision: 0,
+        createdAt: now,
+        attempts: 0,
+        nextAttemptAt: now,
       });
     }
   } catch (error) {
     console.error("Error uploading book:", error);
-    // Clean up local storage if needed
     try {
       await db.files.where("fileId").equals(fileId).delete();
-      await db.metadata.where("docId").equals(docId).delete();
+      await db.books.where("id").equals(docId).delete();
     } catch (cleanupError) {
       console.error("Error cleaning up local storage:", cleanupError);
     }
@@ -88,26 +93,17 @@ async function uploadBook(
 }
 
 async function listCloudBooks() {
+  const db = getDb();
   try {
-    const user = await AuthAPI.getCurrentUser();
-    if (!user) {
-      throw new Error("User not found");
-    }
-    const userId = user.id;
-    console.log({ userId });
-    const { data, error } = await supabase
-      .from("metadata")
-      .select("*")
-      .eq("user_id", userId);
-
-    if (error) {
-      throw new Error(`Failed to fetch books from cloud: ${error.message}`);
-    }
-
-    return data;
+    const books = await db.books
+      .where("syncScope")
+      .equals("cloud")
+      .and((b) => b.deletedAt === null)
+      .toArray();
+    return books;
   } catch (error) {
     throw new Error(
-      `Failed to fetch books from cloud: ${
+      `Failed to fetch cloud books: ${
         error instanceof Error ? error.message : "Unknown error"
       }`,
     );
@@ -115,12 +111,16 @@ async function listCloudBooks() {
 }
 
 async function listLocalBooks() {
+  const db = getDb();
   try {
-    const books = await db.metadata.toArray();
+    const books = await db.books
+      .where("deletedAt")
+      .equals(null as unknown as number)
+      .toArray();
     return books;
   } catch (error) {
     throw new Error(
-      `Failed to fetch books from local storage: ${
+      `Failed to fetch local books: ${
         error instanceof Error ? error.message : "Unknown error"
       }`,
     );
@@ -128,6 +128,7 @@ async function listLocalBooks() {
 }
 
 async function getlocalBook(fileId: string) {
+  const db = getDb();
   try {
     const file = await db.files.where("fileId").equals(fileId).first();
     return file?.file || null;
@@ -144,8 +145,9 @@ async function getlocalImage(imageId: string | null | undefined) {
   if (!imageId) {
     return null;
   }
+  const db = getDb();
   try {
-    const imageEntry = await db.image.where("imageId").equals(imageId).first();
+    const imageEntry = await db.images.where("imageId").equals(imageId).first();
     return imageEntry?.image || null;
   } catch (error) {
     throw new Error(
@@ -157,81 +159,84 @@ async function getlocalImage(imageId: string | null | undefined) {
 }
 
 async function downloadBook(docId: string) {
+  const db = getDb();
   const user = await AuthAPI.getCurrentUser();
   if (!user) {
     throw new Error("User not found");
   }
-  const userId = user.id;
 
-  // Get the metadata to find the file
-  const { data: metadata, error: metadataError } = await supabase
-    .from("metadata")
-    .select("file_id, imageId")
-    .eq("id", docId)
-    .eq("user_id", userId) // Ensure user owns the book
-    .single();
-
-  if (metadataError || !metadata) {
-    throw new Error("Book not found or unauthorized");
+  const book = await db.books.where("id").equals(docId).first();
+  if (!book) {
+    throw new Error("Book not found locally");
   }
 
-  // Download the file from storage
-  const { data: fileData, error: fileError } = await supabase.storage
-    .from(FILE_NAME)
-    .download(metadata.file_id);
-
-  if (fileError) {
-    throw new Error(`Failed to download book: ${fileError.message}`);
+  if (book.fileSyncStatus === "present") {
+    return;
   }
 
-  // store in indexdb
-  await db.files.add({
-    fileId: metadata.file_id,
-    file: fileData,
+  await db.books.where("id").equals(docId).modify({
+    fileSyncStatus: "downloading",
   });
 
-  //download image form storage
-  if (!metadata.imageId) {
-    const { data: imageData, error: imageError } = await supabase.storage
-      .from(IMAGE_NAME)
-      .download(metadata.imageId);
+  try {
+    const { data: fileData, error: fileError } = await supabase.storage
+      .from(FILE_NAME)
+      .download(`${user.id}/${docId}/${book.fileId}.pdf`);
 
-    if (imageError) {
-      throw new Error(`Failed to download book: ${imageError.message}`);
+    if (fileError) {
+      throw new Error(`Failed to download book: ${fileError.message}`);
     }
+
+    await db.files.add({
+      fileId: book.fileId,
+      file: fileData,
+    });
+
+    await db.books.where("id").equals(docId).modify({
+      fileSyncStatus: "present",
+    });
+  } catch (error) {
+    await db.books.where("id").equals(docId).modify({
+      fileSyncStatus: "failed",
+    });
+    throw error;
   }
-  // store in indexdb
-  await db.image.add({
-    imageId: metadata.imageId,
-    image: fileData,
-  });
 }
 
 async function deleteBook(docId: string) {
-  //  TODO: how to authenticate locally
+  const db = getDb();
 
-  // const {
-  //   data: { user },
-  //   error: userError,
-  // } = await supabase.auth.getUser();
-  // if (userError || !user) {
-  //   throw new Error("User not authenticated");
-  // }
-
-  const book = await db.metadata.where("docId").equals(docId).first();
-
+  const book = await db.books.where("id").equals(docId).first();
   if (!book) {
     throw new Error("Book not found");
   }
 
-  // Delete locally
-  await db.files.where("fileId").equals(book.fileId).delete();
-  if (book.imageId) {
-    await db.image.where("imageId").equals(book.imageId).delete();
-  }
-  await db.metadata.where("docId").equals(docId).delete();
+  const now = Date.now();
 
-  await syncManager.queueOperation("delete", docId, {});
+  if (book.syncScope === "cloud") {
+    await db.books.where("id").equals(docId).modify({
+      deletedAt: now,
+      syncStatus: "pending",
+      updatedAt: now,
+    });
+
+    await db.outbox.add({
+      entityType: "book",
+      entityId: docId,
+      op: "delete",
+      payload: {},
+      baseRevision: book.baseRevision,
+      createdAt: now,
+      attempts: 0,
+      nextAttemptAt: now,
+    });
+  } else {
+    await db.files.where("fileId").equals(book.fileId).delete();
+    if (book.imageId) {
+      await db.images.where("imageId").equals(book.imageId).delete();
+    }
+    await db.books.where("id").equals(docId).delete();
+  }
 }
 
 async function updateBookMetadata(
@@ -240,49 +245,56 @@ async function updateBookMetadata(
     title?: string;
     author?: string;
     tags?: string[];
-    is_favourite?: boolean;
-    note?: string;
-    image?: string;
+    isFavourite?: boolean;
   },
 ) {
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-  if (userError || !user) {
-    throw new Error("User not authenticated");
+  const db = getDb();
+  const now = Date.now();
+
+  const book = await db.books.where("id").equals(docId).first();
+  if (!book) {
+    throw new Error("Book not found");
   }
 
-  // Also update local storage first
-  await db.metadata.where("docId").equals(docId).modify(updates);
-
-  // Queue the update operation for cloud sync
-  await syncManager.queueOperation("update", docId, {
+  await db.books.where("id").equals(docId).modify({
     ...updates,
+    updatedAt: now,
   });
+
+  if (book.syncScope === "cloud") {
+    await db.books.where("id").equals(docId).modify({
+      syncStatus: "pending",
+    });
+
+    await db.outbox.add({
+      entityType: "book",
+      entityId: docId,
+      op: "upsert",
+      payload: updates,
+      baseRevision: book.baseRevision,
+      createdAt: now,
+      attempts: 0,
+      nextAttemptAt: now,
+    });
+  }
 
   return { id: docId, ...updates };
 }
 
 async function deleteLocalBook(docId: string) {
+  const db = getDb();
   try {
-    // Get the book metadata first to find fileId and imageId
-    const book = await db.metadata.where("docId").equals(docId).first();
+    const book = await db.books.where("id").equals(docId).first();
 
     if (!book) {
       throw new Error("Book not found");
     }
 
-    // Delete file from Dexie using fileId
     await db.files.where("fileId").equals(book.fileId).delete();
-
-    // Delete metadata using docId (unique identifier)
-    await db.metadata.where("docId").equals(docId).delete();
-
-    // Delete image if it exists
     if (book.imageId) {
-      await db.image.where("imageId").equals(book.imageId).delete();
+      await db.images.where("imageId").equals(book.imageId).delete();
     }
+    await db.books.where("id").equals(docId).delete();
   } catch (error) {
     console.error("Error deleting local book:", error);
     throw new Error(
