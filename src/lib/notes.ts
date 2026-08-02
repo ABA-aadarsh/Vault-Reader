@@ -1,6 +1,7 @@
 import type { BookVaultDexie } from "./dexie/schema";
 import { noteToDomain } from "./mappers";
 import type { Note } from "./domain";
+import { enqueue } from "./outbox";
 
 /**
  * Get a note by bookId (1:1 relationship with book).
@@ -37,15 +38,12 @@ export async function upsertNote(
 
     // Enqueue outbox for cloud sync
     if (book?.syncScope === "cloud") {
-      await db.outbox.add({
+      await enqueue(db, {
         entityType: "note",
         entityId: bookId,
         op: "upsert",
         payload: { body },
         baseRevision: existing.baseRevision,
-        createdAt: now,
-        attempts: 0,
-        nextAttemptAt: now,
       });
     }
   } else {
@@ -63,15 +61,12 @@ export async function upsertNote(
 
     // Enqueue outbox for cloud sync
     if (book?.syncScope === "cloud") {
-      await db.outbox.add({
+      await enqueue(db, {
         entityType: "note",
         entityId: bookId,
         op: "upsert",
         payload: { body },
         baseRevision: 0,
-        createdAt: now,
-        attempts: 0,
-        nextAttemptAt: now,
       });
     }
   }
@@ -99,15 +94,12 @@ export async function deleteNote(
       updatedAt: now,
     });
 
-    await db.outbox.add({
+    await enqueue(db, {
       entityType: "note",
       entityId: bookId,
       op: "delete",
       payload: {},
       baseRevision: note.baseRevision,
-      createdAt: now,
-      attempts: 0,
-      nextAttemptAt: now,
     });
   } else {
     // Hard delete for local-only books

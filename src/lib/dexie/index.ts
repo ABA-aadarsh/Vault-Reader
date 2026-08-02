@@ -32,3 +32,5 @@ export { getNote, upsertNote, deleteNote } from "../notes";
 export { getReadingState, setPage } from "../readingState";
 export { getFileBlob, removeFile, hasFile } from "../files";
 export { getImageBlob, removeImage, hasImage } from "../images";
+export { enqueue, inspectOutbox, getPendingCount, getOutboxStats } from "../outbox";
+export type { EnqueueParams, OutboxStats } from "../outbox";

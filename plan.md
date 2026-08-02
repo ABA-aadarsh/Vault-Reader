@@ -55,6 +55,7 @@ Build a **cloud-coordinated multi-master**, offline-first sync system for a **si
 | Recently deleted | Silent tombstones only; no UI in v1 |
 | Orphan GC | Delete storage files with DB row in same operation |
 | PDF auto-download | Default: `never` (manual open to download) |
+| Outbox coalesce | Shallow merge for upsert+upsert; delete wins over upsert; throws on delete+upsert |
 
 ---
 
@@ -478,12 +479,34 @@ While conflict open: pause sync **only for that entity**; rest continues.
 
 ---
 
-### Phase 3 — Outbox
+### Phase 3 — Outbox *(completed)*
 
-3.1 `enqueue(op)` transactional with entity write
-3.2 Coalesce rules implementation + tests
-3.3 Outbox inspector debug helper
-3.4 Status counts: pending ops
+3.1 Centralized `enqueue()` in `src/lib/outbox.ts` — transactional coalesce *(done)*
+3.2 Coalesce rules: shallow merge upsert+upsert, delete wins over upsert, throws on delete+upsert *(done)*
+3.3 `inspectOutbox()` console dump helper *(done)*
+3.4 `getPendingCount()` + `getOutboxStats()` status APIs *(done)*
+3.5 Books/notes repos migrated to use `enqueue()` *(done)*
+3.6 `SyncManager.queueOperation` replaced with `triggerSyncIfOnline()` *(done)*
+
+**Decisions locked for Phase 3 (from grilling session):**
+- Enqueue: centralized `src/lib/outbox.ts` module; books.ts and notes.ts call `enqueue()` instead of inline `db.outbox.add()`
+- Coalesce: shallow merge for upsert+upsert (new keys overwrite, old keys preserved); earliest `baseRevision` kept
+- Delete vs upsert: `delete` wins over `upsert`; reverse order (delete+upsert) throws error — must use `restoreBook()` flow
+- Promote: always inserts fresh, no coalesce with existing outbox entries
+- Atomicity: coalesce check + write runs in a single Dexie transaction
+- ReadingState outbox: deferred to Phase 10
+- Error classification + backoff: deferred to Phase 4
+- Inspector: console dump function (`inspectOutbox()`), called from browser DevTools
+- Status counts: both `getPendingCount()` (for sync chip) and `getOutboxStats()` (detailed breakdown)
+
+**Files created:**
+- `src/lib/outbox.ts` — enqueue, inspectOutbox, getPendingCount, getOutboxStats
+
+**Files modified:**
+- `src/lib/books.ts` — 5 inline `db.outbox.add()` replaced with `enqueue()`
+- `src/lib/notes.ts` — 3 inline `db.outbox.add()` replaced with `enqueue()`
+- `src/features/supabase/sync/syncManager.ts` — `queueOperation` replaced with `triggerSyncIfOnline()`
+- `src/lib/dexie/index.ts` — added outbox exports
 
 **Exit:** every cloud-intent mutation leaves a coalesced outbox row.
 

@@ -7,54 +7,17 @@ const FILE_NAME = process.env.NEXT_PUBLIC_SUPABASE_BUCKET_FILE_NAME!;
 const IMAGE_NAME = process.env.NEXT_PUBLIC_SUPABASE_BUCKET_IMAGE_NAME!;
 
 class SyncManager {
-  async queueOperation(
-    entityType: OutboxEntry["entityType"],
-    entityId: string,
-    op: OutboxEntry["op"],
-    payload: Record<string, unknown>,
-    baseRevision: number,
-  ) {
-    const db = getDb();
+  /**
+   * Trigger an immediate sync cycle if online.
+   * Entity writes and outbox enqueue are handled by repo functions (books.ts, notes.ts).
+   */
+  async triggerSyncIfOnline() {
+    if (!navigator.onLine) return;
+
     try {
-      const now = Date.now();
-
-      await db.outbox.add({
-        entityType,
-        entityId,
-        op,
-        payload,
-        baseRevision,
-        createdAt: now,
-        attempts: 0,
-        nextAttemptAt: now,
-      });
-
-      if (entityType === "book") {
-        await db.books.where("id").equals(entityId).modify({
-          syncStatus: "pending",
-          updatedAt: now,
-        });
-      } else if (entityType === "note") {
-        await db.notes.where("bookId").equals(entityId).modify({
-          syncStatus: "pending",
-          updatedAt: now,
-        });
-      }
-
-      console.log(`[SyncManager] Queued ${op} operation for ${entityId}`);
-
-      if (navigator.onLine) {
-        console.log(`[SyncManager] Online detected, syncing immediately...`);
-        try {
-          await this.processQueue();
-          console.log(`[SyncManager] Immediate sync completed`);
-        } catch (error) {
-          console.error(`[SyncManager] Immediate sync failed, will retry later:`, error);
-        }
-      }
+      await this.processQueue();
     } catch (error) {
-      console.error("[SyncManager] Error queuing operation:", error);
-      throw error;
+      console.error("[SyncManager] Immediate sync failed, will retry later:", error);
     }
   }
 

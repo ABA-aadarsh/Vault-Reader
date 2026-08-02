@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from "uuid";
 import type { BookVaultDexie } from "./dexie/schema";
 import { bookToDomain } from "./mappers";
 import type { Book, SyncScope } from "./domain";
+import { enqueue } from "./outbox";
 
 export interface CreateBookParams {
   title: string;
@@ -33,7 +34,6 @@ export async function createBook(
     db.files,
     db.images,
     db.books,
-    db.outbox,
     async () => {
       // Store file blob
       await db.files.add({ fileId, file });
@@ -62,22 +62,19 @@ export async function createBook(
         updatedAt: now,
         updatedByDeviceId: "",
       });
-
-      // Enqueue cloud sync if needed
-      if (syncScope === "cloud") {
-        await db.outbox.add({
-          entityType: "book",
-          entityId: bookId,
-          op: "upsert",
-          payload: { title, author, tags, fileId, isFavourite, imageId },
-          baseRevision: 0,
-          createdAt: now,
-          attempts: 0,
-          nextAttemptAt: now,
-        });
-      }
     },
   );
+
+  // Enqueue cloud sync if needed (separate transaction via enqueue())
+  if (syncScope === "cloud") {
+    await enqueue(db, {
+      entityType: "book",
+      entityId: bookId,
+      op: "upsert",
+      payload: { title, author, tags, fileId, isFavourite, imageId },
+      baseRevision: 0,
+    });
+  }
 
   return bookId;
 }
@@ -145,15 +142,12 @@ export async function updateBook(
   if (book.syncScope === "cloud") {
     await db.books.where("id").equals(bookId).modify({ syncStatus: "pending" });
 
-    await db.outbox.add({
+    await enqueue(db, {
       entityType: "book",
       entityId: bookId,
       op: "upsert",
       payload: updates,
       baseRevision: book.baseRevision,
-      createdAt: now,
-      attempts: 0,
-      nextAttemptAt: now,
     });
   }
 }
@@ -178,15 +172,12 @@ export async function softDeleteBook(
       .equals(bookId)
       .modify({ deletedAt: now, syncStatus: "pending", updatedAt: now });
 
-    await db.outbox.add({
+    await enqueue(db, {
       entityType: "book",
       entityId: bookId,
       op: "delete",
       payload: {},
       baseRevision: book.baseRevision,
-      createdAt: now,
-      attempts: 0,
-      nextAttemptAt: now,
     });
   } else {
     // Local-only: hard delete immediately
@@ -212,7 +203,7 @@ export async function restoreBook(
     .modify({ deletedAt: null, syncStatus: "pending", updatedAt: now });
 
   if (book.syncScope === "cloud") {
-    await db.outbox.add({
+    await enqueue(db, {
       entityType: "book",
       entityId: bookId,
       op: "upsert",
@@ -225,9 +216,6 @@ export async function restoreBook(
         imageId: book.imageId,
       },
       baseRevision: book.baseRevision,
-      createdAt: now,
-      attempts: 0,
-      nextAttemptAt: now,
     });
   }
 }
@@ -269,10 +257,10 @@ export async function promoteToCloud(
     .equals(bookId)
     .modify({ syncScope: "cloud", syncStatus: "pending", updatedAt: now });
 
-  await db.outbox.add({
+  await enqueue(db, {
     entityType: "book",
     entityId: bookId,
-    op: "upsert",
+    op: "promote",
     payload: {
       title: book.title,
       author: book.author,
@@ -282,8 +270,5 @@ export async function promoteToCloud(
       imageId: book.imageId,
     },
     baseRevision: 0,
-    createdAt: now,
-    attempts: 0,
-    nextAttemptAt: now,
   });
 }
