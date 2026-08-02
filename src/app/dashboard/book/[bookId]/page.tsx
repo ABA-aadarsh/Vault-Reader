@@ -2,12 +2,13 @@
 
 import { NoteEditor } from "@/features/Note/_components/NoteEditor";
 import { PDFViewer } from "@/features/PDFViewer/PDFViewer";
-import { useLocalBookList } from "@/features/Books/hooks/useLocalBookList";
-import { useCloudBookList } from "@/features/Books/hooks/useCloudBookList";
-import { useState, useEffect, useMemo } from "react";
+import { useBooks } from "@/features/Books/hooks/useBooks";
+import { useState, useEffect } from "react";
 import React from "react";
 import { Loader2 } from "lucide-react";
-import BooksAPI from "@/features/supabase/books/book.service";
+import { useDb } from "@/lib/dexie/db";
+import { getFileBlob } from "@/lib/files";
+import type { Book } from "@/lib/domain";
 
 interface PageProps {
   params: Promise<{
@@ -17,27 +18,21 @@ interface PageProps {
 
 export default function BookViewPage({ params }: PageProps) {
   const { bookId } = React.use(params);
-  const { data: localBooks, isLoading: localLoading } = useLocalBookList();
-  const { data: cloudBooks, isLoading: cloudLoading } = useCloudBookList();
-  const [selectedBook, setSelectedBook] = useState<any>(null);
+  const { data: books, isLoading } = useBooks();
+  const [selectedBook, setSelectedBook] = useState<Book | null>(null);
   const [fileUrl, setFileUrl] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [isFetchingFile, setIsFetchingFile] = useState(false);
+  const db = useDb();
 
-  // Find the book in either local or cloud books
+  // Find the book in the list
   useEffect(() => {
-    if (!localLoading && !cloudLoading) {
-      console.log({ localBooks, cloudBooks });
-      const book =
-        localBooks?.find((b) => b.fileId === bookId) ||
-        cloudBooks?.find((b) => b.fileId === bookId);
-
+    if (!isLoading) {
+      const book = books?.find((b) => b.fileId === bookId);
       setSelectedBook(book || null);
-      setIsLoading(false);
     }
-  }, [bookId, localBooks, cloudBooks, localLoading, cloudLoading]);
+  }, [bookId, books, isLoading]);
 
-  // Fetch the actual file blob for local books and create blob URL
+  // Fetch the actual file blob and create blob URL
   useEffect(() => {
     if (!selectedBook) return;
 
@@ -48,28 +43,16 @@ export default function BookViewPage({ params }: PageProps) {
       try {
         setIsFetchingFile(true);
 
-        // Check if this is a local book by checking if it exists in localBooks
-        const isLocalBook = localBooks?.some(
-          (b) => b.fileId === selectedBook.fileId,
-        );
+        const blob = await getFileBlob(db, selectedBook.fileId);
 
-        if (isLocalBook) {
-          // Fetch file blob from Dexie for local books
-          const fileBlob = await BooksAPI.getlocalBook(selectedBook.fileId);
+        if (!isMounted) return;
 
-          if (!isMounted) return;
-
-          if (fileBlob) {
-            // Create blob URL for the file
-            currentBlobUrl = URL.createObjectURL(fileBlob);
-            setFileUrl(currentBlobUrl);
-          } else {
-            console.error("File blob not found for local book");
-            setFileUrl(null);
-          }
+        if (blob) {
+          currentBlobUrl = URL.createObjectURL(blob);
+          setFileUrl(currentBlobUrl);
         } else {
-          // For cloud books, use the existing fileUrl from selectedBook
-          setFileUrl(selectedBook.fileUrl || null);
+          console.error("File blob not found for book");
+          setFileUrl(null);
         }
       } catch (error) {
         console.error("Error fetching file blob:", error);
@@ -85,14 +68,13 @@ export default function BookViewPage({ params }: PageProps) {
 
     fetchFileBlob();
 
-    // Cleanup: revoke the blob URL when component unmounts or selectedBook changes
     return () => {
       isMounted = false;
       if (currentBlobUrl) {
         URL.revokeObjectURL(currentBlobUrl);
       }
     };
-  }, [selectedBook, localBooks]);
+  }, [selectedBook, db]);
 
   if (isLoading) {
     return (
@@ -114,8 +96,6 @@ export default function BookViewPage({ params }: PageProps) {
       </div>
     );
   }
-
-  const { fileId, title, author } = selectedBook;
 
   return (
     <div className="h-screen flex  bg-background">

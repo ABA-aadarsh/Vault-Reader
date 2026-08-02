@@ -5,6 +5,7 @@ import React, {
   useCallback,
   createContext,
   useContext,
+  useRef,
 } from "react";
 import {
   Dialog,
@@ -18,7 +19,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
 import {
   Upload,
   FileText,
@@ -29,8 +29,7 @@ import {
   Cloud,
   CloudOff,
 } from "lucide-react";
-import BooksAPI from "@/features/supabase/books/book.service";
-import { syncManager } from "@/features/supabase/sync/syncManager";
+import { useCreateBook } from "@/features/Books/hooks/useCreateBook";
 
 // File type interface
 interface FileData {
@@ -75,6 +74,7 @@ const FileDropDialog = ({
   droppedFiles: File[];
   isOnline: boolean;
 }) => {
+  const createBook = useCreateBook();
   const [formData, setFormData] = useState<FileData>({
     title: "",
     author: null,
@@ -139,32 +139,21 @@ const FileDropDialog = ({
       ...formData,
       author: authorInput.trim() || null,
     };
-    // Handle form submission here
+
     try {
       if (!finalData.file) {
         throw new Error("File is required.");
       }
-      await BooksAPI.uploadBook(
-        finalData.title,
-        finalData.author || "",
-        finalData.tags,
-        finalData.isFavourite,
-        finalData.image,
-        finalData.file,
-        finalData.syncToCloud,
-      );
+      await createBook.mutateAsync({
+        title: finalData.title,
+        author: finalData.author || "",
+        tags: finalData.tags,
+        isFavourite: finalData.isFavourite,
+        image: finalData.image,
+        file: finalData.file,
+        syncScope: finalData.syncToCloud ? "cloud" : "local",
+      });
       console.log("Book data submitted:", finalData);
-
-         // If online and syncing to cloud, process queue immediately
-    if (isOnline && finalData.syncToCloud) {
-      console.log("[BookAddProvider] ✓ Book added while online, syncing...");
-      try {
-        await syncManager.processQueue();
-        console.log("[BookAddProvider] ✓ Book synced to cloud");
-      } catch (error) {
-        console.error("[BookAddProvider] ✗ Sync failed:", error);
-      }
-    }
     } catch (error) {
       console.error("Book upload failed:", error);
     }
@@ -474,10 +463,10 @@ const FileDropDialog = ({
           </Button>
           <Button
             onClick={handleSubmit}
-            disabled={!formData.title.trim() || !formData.file}
+            disabled={!formData.title.trim() || !formData.file || createBook.isPending}
             className="px-6 bg-primary hover:bg-primary/90 text-primary-foreground border-0 shadow-sm"
           >
-            Add Book
+            {createBook.isPending ? "Adding..." : "Add Book"}
           </Button>
         </div>
       </DialogContent>
@@ -492,15 +481,15 @@ export function BookAddProvider({ children }: { children: React.ReactNode }) {
   const [showDropMessage, setShowDropMessage] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [droppedFiles, setDroppedFiles] = useState<File[]>([]);
-  const wasOnlineRef = React.useRef(navigator.onLine); // Track previous state with ref
- const isInitialCheckRef = React.useRef(true); // Track if first network check
+  const wasOnlineRef = useRef(navigator.onLine); // Track previous state with ref
+  const isInitialCheckRef = useRef(true); // Track if first network check
 
-  // Monitor online status and sync on mount
+  // Monitor online status with real network verification
   useEffect(() => {
     const check = async () => {
       const prevOnline = wasOnlineRef.current; // Read from ref (not state)
       const isInitialCheck = isInitialCheckRef.current; // Check if this is first run
-      
+
       if (!navigator.onLine) {
         setIsOnline(false);
         wasOnlineRef.current = false;
@@ -516,30 +505,17 @@ export function BookAddProvider({ children }: { children: React.ReactNode }) {
         });
         setIsOnline(true);
         wasOnlineRef.current = true;
-        console.log("app online")
-        
-        // Sync if: initial check on mount while online, OR came from offline to online
-        if (isInitialCheck || !prevOnline) {
-          console.log("[BookAddProvider] ✓ Network restored, syncing...");
-         try {
-            await syncManager.pullFromCloud();
-            await syncManager.processQueue(); 
-            console.log("[BookAddProvider] ✓ Sync completed");
-          } catch (error) {
-            console.error("[BookAddProvider] ✗ Sync failed:", error);
-            // Keep online state based on the network check above; sync can fail for non-network reasons.
-          }
-        }
-        
-        // Mark initial check as done after first successful online check
-        if (isInitialCheck) {
-          isInitialCheckRef.current = false;
-        }
+        console.log("app online");
       } catch (error) {
         console.error("Network check failed:", error);
         setIsOnline(false);
         wasOnlineRef.current = false;
         console.log("app offline");
+      }
+
+      // Mark initial check as done after first successful check
+      if (isInitialCheck) {
+        isInitialCheckRef.current = false;
       }
     };
 

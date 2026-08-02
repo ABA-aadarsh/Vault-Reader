@@ -13,7 +13,7 @@ import {
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ConfirmationDialog } from "@/components/shared/ConfirmationDialog";
-import BooksAPI from "@/features/supabase/books/book.service";
+import { useDeleteBook } from "@/features/Books/hooks/useDeleteBook";
 
 export type VersionStatus = "consistent" | "behind" | "colliding";
 
@@ -46,7 +46,7 @@ export const BookCard = ({
 }: BookCardProps) => {
   const router = useRouter();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
+  const deleteBook = useDeleteBook();
 
   const {
     docId,
@@ -57,7 +57,6 @@ export const BookCard = ({
     isFavourite,
     note,
     fileId,
-    imageId,
   } = book;
 
   const handleCardClick = () => {
@@ -71,9 +70,7 @@ export const BookCard = ({
 
   const confirmDelete = async () => {
     try {
-      setIsDeleting(true);
-      await BooksAPI.deleteBook(docId);
-
+      await deleteBook.mutateAsync({ bookId: docId });
       setShowDeleteDialog(false);
       if (onDeleted) {
         onDeleted();
@@ -81,8 +78,6 @@ export const BookCard = ({
     } catch (error) {
       console.error("Error deleting book:", error);
       alert("Failed to delete book. Please try again.");
-    } finally {
-      setIsDeleting(false);
     }
   };
 
@@ -99,7 +94,7 @@ export const BookCard = ({
     }
   };
 
-  const fallbackImage = "/placeholder.png"; // Replace with your placeholder asset
+  const fallbackImage = "/placeholder.png";
 
   if (type === "grid") {
     return (
@@ -161,7 +156,7 @@ export const BookCard = ({
           title="Delete Book"
           description={`Are you sure you want to delete "${title}"? This action cannot be undone.`}
           onConfirm={confirmDelete}
-          isLoading={isDeleting}
+          isLoading={deleteBook.isPending}
           confirmText="Delete"
           cancelText="Cancel"
           variant="destructive"
@@ -230,7 +225,7 @@ export const BookCard = ({
         title="Delete Book"
         description={`Are you sure you want to delete "${title}"? This action cannot be undone.`}
         onConfirm={confirmDelete}
-        isLoading={isDeleting}
+        isLoading={deleteBook.isPending}
         confirmText="Delete"
         cancelText="Cancel"
         variant="destructive"

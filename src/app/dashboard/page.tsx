@@ -3,20 +3,19 @@
 import { Book, BookCard } from "@/features/Books/_components/BookCard";
 import { useState, useEffect } from "react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { LayoutGrid, List, Plus } from "lucide-react";
-import { useLocalBookList } from "@/features/Books/hooks/useLocalBookList";
-import { useCloudBookList } from "@/features/Books/hooks/useCloudBookList";
-import { Button } from "@/components/ui/button";
-import BooksAPI from "@/features/supabase/books/book.service";
+import { LayoutGrid, List } from "lucide-react";
+import { useBooks } from "@/features/Books/hooks/useBooks";
 import {
   AddBookButton,
-  useBookAdd,
 } from "@/features/Books/provider/BookDropAddProvider";
+import { useDb } from "@/lib/dexie/db";
+import { getImageBlob } from "@/lib/images";
 
 export default function Page() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const { data: booksList, isLoading, isError } = useLocalBookList();
+  const { data: booksList, isLoading, isError } = useBooks();
   const [booksWithImages, setBooksWithImages] = useState<Book[]>([]);
+  const db = useDb();
 
   // Fetch image blobs for local books and create blob URLs
   useEffect(() => {
@@ -27,20 +26,26 @@ export default function Page() {
     const loadImages = async () => {
       const booksWithImageUrls = await Promise.all(
         booksList.map(async (book) => {
+          const uiBook: Book = {
+            title: book.title,
+            author: book.author,
+            tags: book.tags,
+            fileId: book.fileId,
+            docId: book.id,
+            isFavourite: book.isFavourite,
+            imageId: book.imageId,
+          };
           try {
-            // Fetch image blob from Dexie if imageId exists
             if (book.imageId) {
-              const imageBlob = await BooksAPI.getlocalImage(book.imageId);
+              const imageBlob = await getImageBlob(db, book.imageId);
               if (imageBlob) {
-                // Create blob URL for the image
-                const blobUrl = URL.createObjectURL(imageBlob);
-                return { ...book, image: blobUrl };
+                uiBook.image = URL.createObjectURL(imageBlob);
               }
             }
           } catch (error) {
             console.error(`Error loading image for book ${book.title}:`, error);
           }
-          return book;
+          return uiBook;
         })
       );
       setBooksWithImages(booksWithImageUrls);
@@ -56,12 +61,22 @@ export default function Page() {
         }
       });
     };
-  }, [booksList]);
+  }, [booksList, db]);
 
   if (isLoading) return <p>Loading...</p>;
   if (isError) return <p>Error loading books.</p>;
 
-  const displayBooks = booksWithImages.length > 0 ? booksWithImages : booksList || [];
+  const displayBooks = booksWithImages.length > 0
+    ? booksWithImages
+    : (booksList || []).map((b) => ({
+        title: b.title,
+        author: b.author,
+        tags: b.tags,
+        fileId: b.fileId,
+        docId: b.id,
+        isFavourite: b.isFavourite,
+        imageId: b.imageId,
+      } as Book));
 
   return (
     <div className="min-h-screen bg-background text-foreground p-6 space-y-12">

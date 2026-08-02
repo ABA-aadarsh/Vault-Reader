@@ -432,16 +432,49 @@ While conflict open: pause sync **only for that entity**; rest continues.
 **Exit:** two accounts on one browser cannot see each other's data.
 
 ---
-### Phase 2 — Local repository API (no cloud)
+### Phase 2 — Local repository API (no cloud) *(completed)*
 
-2.1 `BooksRepo`: create (local|cloud flag), list (exclude deleted), get, update meta, soft delete, restore, hard purge local
-2.2 `NotesRepo`: get/upsert by bookId
-2.3 `ReadingStateRepo`: throttled set page
-2.4 `FilesRepo` / `ImagesRepo`
-2.5 Wire Add Book / library / delete UI to repos (still no real sync)
-2.6 `syncScope` + promote stub (local flag only)
+2.1 `books.ts`: create (local|cloud flag), list (exclude deleted), get, getBookByFileId, update meta, soft delete, restore, hard purge local *(done)*
+2.2 `notes.ts`: get/upsert by bookId *(done)*
+2.3 `readingState.ts`: throttled set page *(done)*
+2.4 `files.ts` / `images.ts`: blob store CRUD *(done)*
+2.5 Wire Add Book / library / delete UI to repos via mutation hooks *(done)*
+2.6 `syncScope` + promote stub (local flag only, enqueues outbox with baseRevision=0) *(done)*
 
-**Exit:** app works fully offline against new schema; old BooksAPI paths deprecated.
+**Files created:**
+- `src/lib/books.ts` — book CRUD repo functions
+- `src/lib/notes.ts` — notes CRUD repo functions
+- `src/lib/readingState.ts` — reading state repo functions
+- `src/lib/files.ts` — PDF blob store functions
+- `src/lib/images.ts` — cover image blob store functions
+- `src/features/Books/hooks/useBooks.ts` — `useBooks()` + `useCloudBooks()` query hooks
+- `src/features/Books/hooks/useCreateBook.ts` — create mutation hook
+- `src/features/Books/hooks/useUpdateBook.ts` — update mutation hook
+- `src/features/Books/hooks/useDeleteBook.ts` — delete mutation hook
+
+**Files modified:**
+- `src/lib/dexie/index.ts` — added re-exports for repo modules
+- `src/features/Books/_components/BookCard.tsx` — uses `useDeleteBook` hook
+- `src/app/dashboard/page.tsx` — uses `useBooks()` + `getImageBlob()`
+- `src/app/dashboard/book/[bookId]/page.tsx` — uses `useBooks()` + `getFileBlob()`
+- `src/features/Books/provider/BookDropAddProvider.tsx` — uses `useCreateBook()`, removed sync triggers
+
+**Files deleted:**
+- `src/features/Books/hooks/useLocalBookList.ts`
+- `src/features/Books/hooks/useCloudBookList.ts`
+- `src/features/supabase/books/book.service.ts` (+ directory)
+
+**Decisions locked for Phase 2 (from grilling session):**
+- Standalone function modules (not classes/repos) in `src/lib/`
+- Domain types returned from repos; Dexie types internal only
+- Single Dexie `db.transaction()` for multi-table writes (book creation)
+- Mutation hooks own React Query invalidation; repo functions are pure data logic
+- `book.service.ts` replaced in-place (deleted, consumers migrated)
+- Old hooks deleted; new `useBooks`/`useCloudBooks` hooks created
+- Promote writes outbox entry with `baseRevision: 0` (ready for Phase 4)
+- Sync triggers removed from `BookDropAddProvider` (Phase 6 territory)
+
+**Exit:** App works fully offline against new schema; old BooksAPI paths deprecated.
 
 ---
 
