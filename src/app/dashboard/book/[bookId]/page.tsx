@@ -8,7 +8,9 @@ import React from "react";
 import { Loader2 } from "lucide-react";
 import { useDb } from "@/lib/dexie/db";
 import { getFileBlob } from "@/lib/files";
+import { downloadPdf } from "@/features/sync/filePlanner";
 import type { Book } from "@/lib/domain";
+import { useAuth } from "@/features/supabase/auth/components/RequireAuth";
 
 interface PageProps {
   params: Promise<{
@@ -23,6 +25,7 @@ export default function BookViewPage({ params }: PageProps) {
   const [fileUrl, setFileUrl] = useState<string | null>(null);
   const [isFetchingFile, setIsFetchingFile] = useState(false);
   const db = useDb();
+  const { user } = useAuth();
 
   // Find the book in the list
   useEffect(() => {
@@ -43,7 +46,11 @@ export default function BookViewPage({ params }: PageProps) {
       try {
         setIsFetchingFile(true);
 
-        const blob = await getFileBlob(db, selectedBook.fileId);
+        let blob = await getFileBlob(db, selectedBook.fileId);
+
+        if (!blob && selectedBook.syncScope === "cloud") {
+          blob = await downloadPdf(db, user.id, selectedBook);
+        }
 
         if (!isMounted) return;
 
@@ -74,7 +81,7 @@ export default function BookViewPage({ params }: PageProps) {
         URL.revokeObjectURL(currentBlobUrl);
       }
     };
-  }, [selectedBook, db]);
+  }, [selectedBook, db, user.id]);
 
   if (isLoading) {
     return (

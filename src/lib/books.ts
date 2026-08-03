@@ -83,10 +83,9 @@ export async function createBook(
  * List all non-deleted books (both local and cloud scope).
  */
 export async function listBooks(db: BookVaultDexie): Promise<Book[]> {
-  const entries = await db.books
-    .where("deletedAt")
-    .equals(null as unknown as number)
-    .toArray();
+  // IndexedDB omits null keys from the deletedAt index, so a where().equals(null)
+  // query is impossible in Dexie (null is rejected as a key). Filter in memory.
+  const entries = (await db.books.toArray()).filter((b) => b.deletedAt === null);
   return entries.map(bookToDomain);
 }
 

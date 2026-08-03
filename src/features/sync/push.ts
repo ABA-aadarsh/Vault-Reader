@@ -160,7 +160,7 @@ async function softDeleteBook(
   currentRevision: number,
 ): Promise<{ revision: number }> {
   const newRevision = currentRevision + 1;
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("books")
     .update({
       deleted_at: new Date().toISOString(),
@@ -169,10 +169,13 @@ async function softDeleteBook(
     })
     .eq("id", bookId)
     .eq("user_id", userId)
-    .eq("revision", currentRevision);
+    .eq("revision", currentRevision)
+    .select("revision")
+    .maybeSingle();
 
   if (error) throw new Error(error.message);
-  return { revision: newRevision };
+  if (!data) throw new Error("CAS conflict: delete revision mismatch");
+  return { revision: data.revision };
 }
 
 async function softDeleteNote(
@@ -181,7 +184,7 @@ async function softDeleteNote(
   currentRevision: number,
 ): Promise<{ revision: number }> {
   const newRevision = currentRevision + 1;
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("notes")
     .update({
       deleted_at: new Date().toISOString(),
@@ -190,10 +193,13 @@ async function softDeleteNote(
     })
     .eq("book_id", bookId)
     .eq("user_id", userId)
-    .eq("revision", currentRevision);
+    .eq("revision", currentRevision)
+    .select("revision")
+    .maybeSingle();
 
   if (error) throw new Error(error.message);
-  return { revision: newRevision };
+  if (!data) throw new Error("CAS conflict: delete revision mismatch");
+  return { revision: data.revision };
 }
 
 // ── Handlers ─────────────────────────────────────────────────
@@ -203,17 +209,30 @@ async function handleBookUpsert(
   userId: string,
   entry: OutboxEntry,
 ): Promise<void> {
-  await uploadFileIfMissing(db, userId, entry.entityId, entry.payload.fileId as string);
+  const book = await db.books.where("id").equals(entry.entityId).first();
+  if (!book) throw new Error("Book not found locally");
 
-  if (entry.payload.imageId) {
-    await uploadImageIfMissing(db, userId, entry.entityId, entry.payload.imageId as string);
+  const payload = {
+    title: book.title,
+    author: book.author,
+    tags: book.tags,
+    isFavourite: book.isFavourite,
+    fileId: book.fileId,
+    imageId: book.imageId,
+    ...entry.payload,
+  };
+
+  await uploadFileIfMissing(db, userId, entry.entityId, payload.fileId as string);
+
+  if (payload.imageId) {
+    await uploadImageIfMissing(db, userId, entry.entityId, payload.imageId as string);
   }
 
   const { revision } = await rpcUpsertBook(
     entry.entityId,
     userId,
     entry.baseRevision,
-    entry.payload,
+    payload,
   );
 
   await db.books.where("id").equals(entry.entityId).modify({
@@ -245,17 +264,30 @@ async function handleBookPromote(
   userId: string,
   entry: OutboxEntry,
 ): Promise<void> {
-  await uploadFileIfMissing(db, userId, entry.entityId, entry.payload.fileId as string);
+  const book = await db.books.where("id").equals(entry.entityId).first();
+  if (!book) throw new Error("Book not found locally");
 
-  if (entry.payload.imageId) {
-    await uploadImageIfMissing(db, userId, entry.entityId, entry.payload.imageId as string);
+  const payload = {
+    title: book.title,
+    author: book.author,
+    tags: book.tags,
+    isFavourite: book.isFavourite,
+    fileId: book.fileId,
+    imageId: book.imageId,
+    ...entry.payload,
+  };
+
+  await uploadFileIfMissing(db, userId, entry.entityId, payload.fileId as string);
+
+  if (payload.imageId) {
+    await uploadImageIfMissing(db, userId, entry.entityId, payload.imageId as string);
   }
 
   const { revision } = await rpcUpsertBook(
     entry.entityId,
     userId,
     0, // strict insert
-    entry.payload,
+    payload,
   );
 
   await db.books.where("id").equals(entry.entityId).modify({

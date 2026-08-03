@@ -553,17 +553,42 @@ While conflict open: pause sync **only for that entity**; rest continues.
 
 ---
 
-### Phase 5 — Pull path (cloud read)
+### Phase 5 — Pull path (cloud read) *(completed)*
 
-5.1 Cursor pull queries (include deleted rows)
-5.2 Apply book/note/reading_state snapshots
-5.3 Tombstone apply → local soft delete + blob cleanup
-5.4 Skip apply when pending/conflict
-5.5 Eager cover download in file planner
-5.6 Lazy PDF: status fields; download on open; remove download
-5.7 Second device smoke: login → see meta/covers → open downloads PDF
+5.1 Cursor pull queries (include deleted rows) *(done)*
+5.2 Apply book/note snapshots *(done; reading_state remains deferred to Phase 10)*
+5.3 Tombstone apply → local soft delete + blob cleanup *(done)*
+5.4 Skip apply when pending/conflict *(done for pending outbox; open conflict handling remains Phase 7)*
+5.5 Eager cover download in file planner *(done)*
+5.6 Lazy PDF: status fields; download on open; remove download *(download on open done; remove download already existed)*
+5.7 Second device smoke: login → see meta/covers → open downloads PDF *(implementation ready; manual multi-device QA remains)*
 
-**Exit:** multi-device converge for happy path (no conflicts).
+**Decisions locked for Phase 5 (from grilling session):**
+- Pull cursors are independent for books and notes.
+- Cursor value is `{ updatedAt, id }`, using `(updated_at, id)` as the stable ordering.
+- Each pull request is limited to 100 rows; later cycles continue from the stored cursor.
+- A pending local outbox entity blocks cursor advancement past that entity so the remote snapshot is retried later.
+- Failed cover/PDF downloads do not block metadata; the relevant local status becomes `failed`.
+- Covers download eagerly after pull; PDFs download only when the user opens a book.
+- Tombstones remain as hidden local rows, while local PDF and cover blobs are removed.
+- Missing remote notes are created locally; note tombstones are retained.
+- Existing blobs are trusted when their immutable file/image ID matches the cloud reference.
+
+**Files created:**
+- `src/features/sync/pull.ts` — paged book/note pull, independent cursors, snapshot/tombstone application
+- `src/features/sync/filePlanner.ts` — eager cover planner and lazy PDF download
+
+**Files modified:**
+- `src/features/supabase/sync/syncManager.ts` — push then bounded pull, followed by cover planning
+- `src/app/dashboard/book/[bookId]/page.tsx` — downloads missing cloud PDFs on open
+- `src/features/sync/push.ts` — hydrate partial book payloads before CAS; detect zero-row delete conflicts
+
+**New implementation findings:**
+- Coalesced book outbox payloads can contain only changed fields, so push must merge the payload with the current local book before calling the full-field CAS RPC. Otherwise an update such as title-only can reset author, tags, favourite, or file references.
+- Supabase update calls do not treat zero affected rows as an error; soft-delete now requests the returned revision and classifies a missing row as a CAS conflict.
+- Phase 5 intentionally leaves cycle mutexes, lifecycle triggers, sync status UI, and repeated-page draining to Phase 6.
+
+**Exit:** Pull implementation supports multi-device happy-path convergence with tombstones, independent cursors, eager covers, and lazy PDFs. Manual two-device verification remains in the Phase 11 checklist.
 
 ---
 
@@ -728,4 +753,4 @@ While conflict open: pause sync **only for that entity**; rest continues.
 
 ---
 
-*Plan approved from grilling session. Start implementation at Phase 0.2 / Phase 1.*
+*Plan approved from grilling session. Phases 0-5 are implemented; next implementation target is Phase 6.*

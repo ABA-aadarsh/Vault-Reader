@@ -56,16 +56,17 @@ interface UserDbProviderProps {
 }
 
 export function UserDbProvider({ userId, children }: UserDbProviderProps) {
-  const [db, setDb] = useState<BookVaultDexie>(() => openUserDb(userId));
+  const [db, setDb] = useState<BookVaultDexie | null>(null);
 
   useEffect(() => {
-    const newDb = openUserDb(userId);
-    setDb(newDb);
+    setDb(openUserDb(userId));
 
     return () => {
       closeUserDb();
     };
   }, [userId]);
+
+  if (!db) return null;
 
   return (
     <UserDbContext.Provider value={{ db, userId }}>
