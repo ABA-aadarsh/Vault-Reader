@@ -56,6 +56,15 @@ Build a **cloud-coordinated multi-master**, offline-first sync system for a **si
 | Orphan GC | Delete storage files with DB row in same operation |
 | PDF auto-download | Default: `never` (manual open to download) |
 | Outbox coalesce | Shallow merge for upsert+upsert; delete wins over upsert; throws on delete+upsert |
+| Push file | `src/features/sync/push.ts` — pure functions, separate from syncManager |
+| Push CAS | Use `cas_upsert_book` / `cas_upsert_note` RPCs; delete uses direct update with CAS revision check |
+| Error classification | auth: 401/403; conflict: CAS conflict; permanent: 400/404/422; transient: network/500+ |
+| Backoff | Exponential 1s→60s cap; 20 max attempts then permanent; auth pauses engine |
+| Push order | Sort by type (book→note→readingState→fileUpload), then upsert before delete |
+| Promote push | Strict insert (baseRevision: 0); row exists = permanent error |
+| Note push | Implemented in Phase 4 (not deferred) |
+| ReadingState push | Deferred to Phase 10 |
+| Storage cleanup on delete | Deferred to Phase 8 |
 
 ---
 
@@ -512,15 +521,33 @@ While conflict open: pause sync **only for that entity**; rest continues.
 
 ---
 
-### Phase 4 — Push path (cloud write)
+### Phase 4 — Push path (cloud write) *(completed)*
 
-4.1 Storage upload helper (prefixed paths)
-4.2 CAS RPCs/clients for books, notes, reading_states
-4.3 `push.ts`: fileUpload → book upsert → note upsert → delete
-4.4 Insert path (`baseRevision = 0` / upsert)
-4.5 Map errors → errorClass; backoff fields
-4.6 Mark entity `synced` + update `baseRevision` on success
-4.7 Auth error pauses engine
+4.1 Storage upload helper with idempotent check (skip if file already exists in bucket) *(done)*
+4.2 CAS RPC clients: `cas_upsert_book`, `cas_upsert_note` via `supabase.rpc()` *(done)*
+4.3 `push.ts`: book upsert → note upsert → delete (sorted by type) *(done)*
+4.4 Insert path: `baseRevision = 0` for promote; CAS RPC handles insert vs update *(done)*
+4.5 Error classification: auth/conflict/permanent/transient with exponential backoff *(done)*
+4.6 Mark entity `synced` + update `revision`/`baseRevision` from RPC response *(done)*
+4.7 Auth error pauses engine (breaks push loop, logs warning) *(done)*
+
+**Decisions locked for Phase 4 (from grilling session):**
+- Push file: new `src/features/sync/push.ts` with pure functions; `syncManager.ts` calls `pushOutbox()`
+- CAS usage: `cas_upsert_book` and `cas_upsert_note` RPCs for upserts; direct update with `.eq("revision", ...)` for soft-deletes (RPC doesn't support `deleted_at`)
+- Note push: implemented now (not deferred) — RPC already existed in migration
+- ReadingState push: deferred to Phase 10 (no outbox entries yet)
+- Error classification: auth (401/403) pauses engine; conflict (CAS) defers to Phase 7; permanent (400/404/422) stops retry; transient (network/500+) schedules backoff
+- Backoff: exponential 1s → 60s cap; max 20 attempts → permanent; `nextAttemptAt` used for scheduling
+- Push order: sort entries by entity type (book → note) then by op (upsert before delete)
+- Promote: strict insert (`baseRevision: 0`); if row exists → CAS conflict → permanent error
+- File upload: inline in book/promote handlers (not separate `fileUpload` outbox entries); idempotent (checks if file exists in bucket before uploading)
+- Storage cleanup on delete: deferred to Phase 8
+
+**Files created:**
+- `src/features/sync/push.ts` — pushOutbox, handlers, error classification, backoff
+
+**Files modified:**
+- `src/features/supabase/sync/syncManager.ts` — removed `_syncBookUpsert`, `_syncBookDelete`, `_syncBookPromote`; `processQueue` now calls `pushOutbox()`
 
 **Exit:** single device online create/update/delete reaches Supabase correctly; retry on blip works.
 

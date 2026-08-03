@@ -1,5 +1,5 @@
 import { getDb } from "@/lib/dexie/db";
-import type { OutboxEntry } from "@/lib/dexie/types";
+import { pushOutbox } from "@/features/sync/push";
 import { supabase } from "../index";
 import AuthAPI from "../auth/auth.service";
 
@@ -7,10 +7,6 @@ const FILE_NAME = process.env.NEXT_PUBLIC_SUPABASE_BUCKET_FILE_NAME!;
 const IMAGE_NAME = process.env.NEXT_PUBLIC_SUPABASE_BUCKET_IMAGE_NAME!;
 
 class SyncManager {
-  /**
-   * Trigger an immediate sync cycle if online.
-   * Entity writes and outbox enqueue are handled by repo functions (books.ts, notes.ts).
-   */
   async triggerSyncIfOnline() {
     if (!navigator.onLine) return;
 
@@ -23,208 +19,17 @@ class SyncManager {
 
   async processQueue() {
     const db = getDb();
-    try {
-      const pendingOps = await db.outbox.toArray();
-
-      if (pendingOps.length === 0) {
-        console.log("[SyncManager] No pending operations");
-        return;
-      }
-
-      console.log(
-        `[SyncManager] Processing ${pendingOps.length} pending operations`
-      );
-
-      for (const op of pendingOps) {
-        try {
-          await this._syncOperation(op);
-          await db.outbox.delete(op.id!);
-          console.log(`[SyncManager] Successfully synced ${op.op} for ${op.entityId}`);
-        } catch (error) {
-          console.error(
-            `[SyncManager] Error syncing ${op.op} for ${op.entityId}:`,
-            error
-          );
-          await db.outbox.update(op.id!, {
-            attempts: (op.attempts || 0) + 1,
-            lastError: error instanceof Error ? error.message : String(error),
-          });
-        }
-      }
-    } catch (error) {
-      console.error("[SyncManager] Error processing queue:", error);
-      throw error;
-    }
-  }
-
-  private async _syncOperation(op: OutboxEntry) {
     const user = await AuthAPI.getCurrentUser();
     if (!user) {
-      throw new Error("User not authenticated");
+      console.log("[SyncManager] No user, skipping push");
+      return;
     }
 
-    switch (op.op) {
-      case "upsert":
-        if (op.entityType === "book") {
-          await this._syncBookUpsert(op.entityId, op.payload, op.baseRevision, user.id);
-        }
-        break;
-      case "delete":
-        if (op.entityType === "book") {
-          await this._syncBookDelete(op.entityId, user.id);
-        }
-        break;
-      case "promote":
-        await this._syncBookPromote(op.entityId, op.payload, user.id);
-        break;
+    const result = await pushOutbox(db, user.id);
+
+    if (result.paused) {
+      console.log("[SyncManager] Auth error — sync paused until re-auth");
     }
-  }
-
-  private async _syncBookUpsert(entityId: string, payload: any, baseRevision: number, userId: string) {
-    const db = getDb();
-
-    const fileEntry = await db.files.where("fileId").equals(payload.fileId).first();
-    if (!fileEntry || !fileEntry.file) {
-      throw new Error("File not found in local storage");
-    }
-
-    console.log(`[SyncManager] Uploading file for ${entityId}...`);
-
-    const fileName = `${userId}/${entityId}/${payload.fileId}.pdf`;
-
-    const { error: fileError } = await supabase.storage
-      .from(FILE_NAME)
-      .upload(fileName, fileEntry.file, {
-        cacheControl: "3600",
-        upsert: false,
-      });
-
-    if (fileError) {
-      throw new Error(`File upload failed: ${fileError.message}`);
-    }
-
-    console.log(`[SyncManager] File uploaded, now uploading metadata...`);
-
-    if (payload.imageId) {
-      const imageEntry = await db.images.where("imageId").equals(payload.imageId).first();
-      if (imageEntry && imageEntry.image) {
-        const imageName = `${userId}/${entityId}/${payload.imageId}.png`;
-
-        const { error: imageError } = await supabase.storage
-          .from(IMAGE_NAME)
-          .upload(imageName, imageEntry.image, {
-            cacheControl: "3600",
-            upsert: false,
-          });
-
-        if (imageError) {
-          console.warn(`[SyncManager] Image upload failed: ${imageError.message}`);
-        }
-      }
-    }
-
-    if (baseRevision === 0) {
-      const { error: metadataError } = await supabase
-        .from("books")
-        .insert({
-          id: entityId,
-          user_id: userId,
-          title: payload.title,
-          author: payload.author,
-          tags: payload.tags || [],
-          is_favourite: payload.isFavourite || false,
-          file_id: payload.fileId,
-          image_id: payload.imageId || null,
-          revision: 1,
-        })
-        .select()
-        .single();
-
-      if (metadataError) {
-        throw new Error(`Create failed: ${metadataError.message}`);
-      }
-    } else {
-      const { error: metadataError } = await supabase
-        .from("books")
-        .update({
-          title: payload.title,
-          author: payload.author,
-          tags: payload.tags,
-          is_favourite: payload.isFavourite,
-          file_id: payload.fileId,
-          image_id: payload.imageId,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", entityId)
-        .eq("user_id", userId)
-        .eq("revision", baseRevision);
-
-      if (metadataError) {
-        throw new Error(`Update failed: ${metadataError.message}`);
-      }
-    }
-
-    console.log(`[SyncManager] Metadata uploaded successfully`);
-
-    const book = await db.books.where("id").equals(entityId).first();
-    if (book) {
-      await db.books.where("id").equals(entityId).modify({
-        syncStatus: "synced",
-        revision: baseRevision === 0 ? 1 : baseRevision + 1,
-        baseRevision: baseRevision === 0 ? 1 : baseRevision + 1,
-      });
-    }
-  }
-
-  private async _syncBookDelete(entityId: string, userId: string) {
-    const db = getDb();
-
-    const book = await db.books.where("id").equals(entityId).first();
-    if (!book) {
-      throw new Error("Book not found locally");
-    }
-
-    const { error: deleteError } = await supabase
-      .from("books")
-      .update({
-        deleted_at: new Date().toISOString(),
-        revision: book.revision + 1,
-      })
-      .eq("id", entityId)
-      .eq("user_id", userId)
-      .eq("revision", book.revision);
-
-    if (deleteError) {
-      throw new Error(`Delete failed: ${deleteError.message}`);
-    }
-
-    await db.books.where("id").equals(entityId).modify({
-      syncStatus: "synced",
-      revision: book.revision + 1,
-      baseRevision: book.revision + 1,
-    });
-  }
-
-  private async _syncBookPromote(entityId: string, payload: any, userId: string) {
-    const db = getDb();
-    const book = await db.books.where("id").equals(entityId).first();
-    if (!book) {
-      throw new Error("Book not found locally");
-    }
-
-    await this._syncBookUpsert(entityId, {
-      title: book.title,
-      author: book.author,
-      tags: book.tags,
-      fileId: book.fileId,
-      isFavourite: book.isFavourite,
-      imageId: book.imageId,
-    }, 0, userId);
-
-    await db.books.where("id").equals(entityId).modify({
-      syncScope: "cloud",
-      syncStatus: "synced",
-    });
   }
 
   async pullFromCloud() {
