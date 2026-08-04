@@ -20,6 +20,8 @@ import Image from "next/image";
 import { PanelLeftClose, Search, Star } from "lucide-react";
 import { useSearchLauncher } from "@/features/Search/provider/SearchLauncherProvider";
 import { useRouter } from "next/navigation";
+import { SyncStatusChip } from "@/features/sync/SyncStatusChip";
+import { SyncNowButton } from "@/features/sync/SyncNowButton";
 
 const mockPdfs = [
   { id: "1", title: "Compiler Design.pdf", isFavorite: true },
@@ -117,6 +119,10 @@ export function AppSidebar() {
 
       {/* Footer Avatar */}
       <SidebarFooter className="border-t border-border px-4 py-3">
+        <div className="flex items-center justify-between mb-2">
+          <SyncStatusChip />
+          <SyncNowButton />
+        </div>
         <div className="flex items-center gap-3">
           <Avatar className="w-9 h-9">
             <AvatarImage src="/user.png" alt="User" />

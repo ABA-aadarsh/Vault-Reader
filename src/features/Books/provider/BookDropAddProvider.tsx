@@ -5,7 +5,6 @@ import React, {
   useCallback,
   createContext,
   useContext,
-  useRef,
 } from "react";
 import {
   Dialog,
@@ -481,57 +480,18 @@ export function BookAddProvider({ children }: { children: React.ReactNode }) {
   const [showDropMessage, setShowDropMessage] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [droppedFiles, setDroppedFiles] = useState<File[]>([]);
-  const wasOnlineRef = useRef(navigator.onLine); // Track previous state with ref
-  const isInitialCheckRef = useRef(true); // Track if first network check
 
-  // Monitor online status with real network verification
   useEffect(() => {
-    const check = async () => {
-      const prevOnline = wasOnlineRef.current; // Read from ref (not state)
-      const isInitialCheck = isInitialCheckRef.current; // Check if this is first run
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
 
-      if (!navigator.onLine) {
-        setIsOnline(false);
-        wasOnlineRef.current = false;
-        console.log("app offline");
-        return;
-      }
-
-      try {
-        await fetch("https://www.google.com/favicon.ico", {
-          method: "HEAD",
-          cache: "no-store",
-          mode: "no-cors",
-        });
-        setIsOnline(true);
-        wasOnlineRef.current = true;
-        console.log("app online");
-      } catch (error) {
-        console.error("Network check failed:", error);
-        setIsOnline(false);
-        wasOnlineRef.current = false;
-        console.log("app offline");
-      }
-
-      // Mark initial check as done after first successful check
-      if (isInitialCheck) {
-        isInitialCheckRef.current = false;
-      }
-    };
-
-    check();
-
-    // These fire instantly when network changes
-    window.addEventListener("online", check);
-    window.addEventListener("offline", check);
-
-    // Fallback poll, less frequent since events cover most cases
-    const interval = setInterval(check, 30000);
+    setIsOnline(navigator.onLine);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
 
     return () => {
-      window.removeEventListener("online", check);
-      window.removeEventListener("offline", check);
-      clearInterval(interval);
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
     };
   }, []);
 

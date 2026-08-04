@@ -2,6 +2,7 @@ import type { BookVaultDexie } from "./dexie/schema";
 import { noteToDomain } from "./mappers";
 import type { Note } from "./domain";
 import { enqueue } from "./outbox";
+import { engine } from "@/features/sync/SyncEngine";
 
 /**
  * Get a note by bookId (1:1 relationship with book).
@@ -45,6 +46,7 @@ export async function upsertNote(
         payload: { body },
         baseRevision: existing.baseRevision,
       });
+      engine.scheduleSync();
     }
   } else {
     // Create new note
@@ -68,6 +70,7 @@ export async function upsertNote(
         payload: { body },
         baseRevision: 0,
       });
+      engine.scheduleSync();
     }
   }
 }
@@ -101,6 +104,7 @@ export async function deleteNote(
       payload: {},
       baseRevision: note.baseRevision,
     });
+    engine.scheduleSync();
   } else {
     // Hard delete for local-only books
     await db.notes.where("bookId").equals(bookId).delete();

@@ -160,7 +160,10 @@ async function applyNote(
 ): Promise<void> {
   const bookId = cloudNote.book_id as string;
   const book = await db.books.get(bookId);
-  if (!book) throw new Error(`Cannot apply note for missing book ${bookId}`);
+  if (!book) {
+    console.warn(`[Pull] Skipping note for missing book ${bookId}`);
+    return;
+  }
 
   const existing = await db.notes.get(bookId);
   const deletedAt = cloudNote.deleted_at as string | null;

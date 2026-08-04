@@ -3,6 +3,7 @@ import type { BookVaultDexie } from "./dexie/schema";
 import { bookToDomain } from "./mappers";
 import type { Book, SyncScope } from "./domain";
 import { enqueue } from "./outbox";
+import { engine } from "@/features/sync/SyncEngine";
 
 export interface CreateBookParams {
   title: string;
@@ -74,6 +75,7 @@ export async function createBook(
       payload: { title, author, tags, fileId, isFavourite, imageId },
       baseRevision: 0,
     });
+    engine.scheduleSync();
   }
 
   return bookId;
@@ -148,6 +150,7 @@ export async function updateBook(
       payload: updates,
       baseRevision: book.baseRevision,
     });
+    engine.scheduleSync();
   }
 }
 
@@ -178,6 +181,7 @@ export async function softDeleteBook(
       payload: {},
       baseRevision: book.baseRevision,
     });
+    engine.scheduleSync();
   } else {
     // Local-only: hard delete immediately
     await hardPurgeLocal(db, bookId);
@@ -216,6 +220,7 @@ export async function restoreBook(
       },
       baseRevision: book.baseRevision,
     });
+    engine.scheduleSync();
   }
 }
 
@@ -270,4 +275,5 @@ export async function promoteToCloud(
     },
     baseRevision: 0,
   });
+  engine.scheduleSync();
 }

@@ -65,25 +65,33 @@ Build a **cloud-coordinated multi-master**, offline-first sync system for a **si
 | Note push | Implemented in Phase 4 (not deferred) |
 | ReadingState push | Deferred to Phase 10 |
 | Storage cleanup on delete | Deferred to Phase 8 |
+| SyncEngine file | New `src/features/sync/SyncEngine.ts` (fresh); old `syncManager.ts` deleted |
+| Mutex model | Boolean `running` + boolean `pending`; coalesces mid-cycle triggers into one follow-up |
+| Status store | Module-level state + `useSyncExternalStore()` hook; no Context, no React Query |
+| Trigger ownership | Engine owns all triggers via `init()` / `destroy()`; no external listener setup |
+| Mutation trigger | Repo functions call `engine.scheduleSync()` directly after `enqueue()`; 500ms debounce |
+| Interval | 60s while visible; stop when hidden; immediate sync on focus (catch-up + restart) |
+| Lifecycle | `UserDbProvider` calls `engine.init()` after DB opens; unmount calls `engine.destroy()` |
+| Manual sync | "Sync now" button in sidebar (bottom); disabled when offline or syncing |
+| Sync chip | Bottom of sidebar; priority: Error > Conflicts(N) > Syncing > Pending(N) > Offline > Synced |
+| Cycle metrics | Persist `lastCycle` to `syncState` table (`at`, `durationMs`, `pushed`, `pulled`, `failed`) |
+| Online detection | Simple `navigator.onLine` events; no fetch-based probing (removed from `BookAddProvider`) |
+| hasMore drain | If pull returns `hasMoreBooks` or `hasMoreNotes`, engine sets `pending = true` for follow-up cycle |
 
 ---
 
 ## 4. Current gaps (codebase)
 
-`syncManager.ts` / `book.service.ts` / `dexie.ts` today:
+Most original gaps are resolved. Remaining gaps:
 
-- Op queue push only; no real multi-device merge
-- Pull uses wall-clock vs `lastSyncedAt`; skips any pending `docId`
-- No tombstones → remote deletes don’t propagate
-- No CAS / revision checks (`version: 1` unused)
-- Notes are a string on metadata
-- Eager PDF pull for all cloud books
-- Global Dexie DB (cross-account leak)
-- No conflict store/UI
-- Delete hard-wipes local then queues cloud delete
-- No retry classification / backoff
-- Flat storage paths
-- Sync triggered from `BookAddProvider` (wrong layer)
+- No conflict detection/UI (Phase 7)
+- No promote UX flow (Phase 8)
+- No recently deleted / restore UI (Phase 8)
+- No server tombstone GC (Phase 8)
+- No session expiry banner (Phase 9)
+- No progress sync toggle (Phase 10)
+- No test runner (Phase 11)
+- Pre-existing lint warnings (not sync-related)
 
 ---
 
@@ -592,14 +600,44 @@ While conflict open: pause sync **only for that entity**; rest continues.
 
 ---
 
-### Phase 6 — SyncEngine orchestration
+### Phase 6 — SyncEngine orchestration *(completed)*
 
-6.1 `runCycle` mutex + steps 7.1
-6.2 All triggers wired; remove sync from `BookAddProvider`
-6.3 Sync status store (React context or query)
-6.4 Manual Sync now
-6.5 Interval + visibility
-6.6 Cycle metrics/logging
+6.1 `runCycle` mutex + steps 7.1 *(done)*
+6.2 All triggers wired; remove sync from `BookAddProvider` *(done)*
+6.3 Sync status store (React context or query) *(done)*
+6.4 Manual Sync now *(done)*
+6.5 Interval + visibility *(done)*
+6.6 Cycle metrics/logging *(done)*
+
+**Decisions locked for Phase 6 (from grilling session):**
+- File location: new `src/features/sync/SyncEngine.ts` created fresh; old `syncManager.ts` deleted
+- Mutex: boolean `running` + boolean `pending` (queued re-run); coalesces all mid-cycle triggers into one follow-up cycle
+- Status store: module-level state + `useSyncExternalStore()` hook; no Context, no React Query
+- Trigger ownership: engine owns all triggers via `init()` / `destroy()`; React components call `engine.runCycle()` for manual sync or `engine.scheduleSync()` after mutations
+- Mutation trigger: repo functions (`books.ts`, `notes.ts`) call `engine.scheduleSync()` directly after `enqueue()`; engine debounces 500ms internally
+- Interval: 60s while visible; stop when hidden; immediate sync on focus (catch-up + restart interval)
+- Lifecycle: `UserDbProvider` calls `engine.init()` after DB opens; unmount calls `engine.destroy()` then `closeUserDb()`
+- Manual sync: "Sync now" button in sidebar (bottom); disabled when offline or syncing; immediate `runCycle()` (bypasses debounce)
+- Sync chip: bottom of sidebar; priority order: Error > Conflicts(N) > Syncing > Pending(N) > Offline > Synced
+- Metrics: persist `lastCycle` to `syncState` table (`at`, `durationMs`, `pushed`, `pulled`, `failed`); no new tables
+- Online detection: simple `navigator.onLine` events only; removed fetch-based probing from `BookAddProvider` (consolidated into engine)
+- `hasMore` pagination drain: if pull returns `hasMoreBooks` or `hasMoreNotes`, engine sets `pending = true` to schedule a follow-up cycle for cursor draining
+
+**Files created:**
+- `src/features/sync/SyncEngine.ts` — runCycle with mutex, triggers, status store, scheduleSync debounce
+- `src/features/sync/useSyncStatus.ts` — useSyncExternalStore hook for sync state
+- `src/features/sync/SyncStatusChip.tsx` — sidebar chip component
+- `src/features/sync/SyncNowButton.tsx` — manual sync button component
+
+**Files modified:**
+- `src/lib/books.ts` — calls `engine.scheduleSync()` after every `enqueue()` (5 call sites)
+- `src/lib/notes.ts` — calls `engine.scheduleSync()` after every `enqueue()` (3 call sites)
+- `src/lib/dexie/db.tsx` — UserDbProvider calls `engine.init()` / `engine.destroy()`
+- `src/features/Books/provider/BookDropAddProvider.tsx` — removed fetch-based online polling; replaced with simple `navigator.onLine` event listeners
+- `src/components/shared/SidebarContainer.tsx` — added SyncStatusChip + SyncNowButton to sidebar footer
+
+**Files deleted:**
+- `src/features/supabase/sync/syncManager.ts` (+ empty `sync/` directory)
 
 **Exit:** one obvious sync entry point; UI reflects state.
 
@@ -743,14 +781,15 @@ While conflict open: pause sync **only for that entity**; rest continues.
 
 ## 15. Reference: existing code to replace
 
-| Area | Current | Target |
+| Area | Old (pre-sync) | Current (Phase 6) |
 |------|---------|--------|
-| Local DB | `src/lib/dexie.ts` singleton | Per-user factory + new schema |
-| Sync | `src/features/supabase/sync/syncManager.ts` | `src/features/sync/*` engine |
-| Books API | `src/features/supabase/books/book.service.ts` | Local repos + thin cloud clients |
-| Triggers | `BookDropAddProvider` online/sync | `SyncEngine` only |
-| Notes | `metadata.note` string | `notes` table 1:1 book |
+| Local DB | ~~`src/lib/dexie.ts` singleton~~ | Per-user factory (`src/lib/dexie/db.tsx`) + new schema |
+| Sync | ~~`src/features/supabase/sync/syncManager.ts`~~ | `src/features/sync/SyncEngine.ts` + push/pull/filePlanner |
+| Books API | ~~`src/features/supabase/books/book.service.ts`~~ | Local repos (`src/lib/books.ts`) + thin cloud clients |
+| Triggers | ~~`BookDropAddProvider` online/sync~~ | `SyncEngine` only (init/destroy in UserDbProvider) |
+| Notes | ~~`metadata.note` string~~ | `notes` table 1:1 book (`src/lib/notes.ts`) |
+| Status UI | *(none)* | `SyncStatusChip` + `SyncNowButton` in sidebar |
 
 ---
 
-*Plan approved from grilling session. Phases 0-5 are implemented; next implementation target is Phase 6.*
+*Plan approved from grilling session. Phases 0-6 are implemented; next implementation target is Phase 7 (Conflicts).*

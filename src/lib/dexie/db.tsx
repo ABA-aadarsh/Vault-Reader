@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 import { BookVaultDexie } from "./schema";
+import { engine } from "@/features/sync/SyncEngine";
 
 let _db: BookVaultDexie | null = null;
 
@@ -60,8 +61,10 @@ export function UserDbProvider({ userId, children }: UserDbProviderProps) {
 
   useEffect(() => {
     setDb(openUserDb(userId));
+    engine.init();
 
     return () => {
+      engine.destroy();
       closeUserDb();
     };
   }, [userId]);

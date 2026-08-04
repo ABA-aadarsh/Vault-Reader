@@ -358,6 +358,7 @@ async function pushEntry(
     case "promote":
       return handleBookPromote(db, userId, entry);
   }
+  throw new Error(`Unhandled push: ${entry.op} for ${entry.entityType}:${entry.entityId}`);
 }
 
 // ── Main entry point ─────────────────────────────────────────
