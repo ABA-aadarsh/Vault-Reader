@@ -13,6 +13,7 @@ import 'react-pdf/dist/Page/TextLayer.css'
 import {RequireAuth, useAuth} from "@/features/supabase/auth/components/RequireAuth";
 import { BookAddProvider } from "@/features/Books/provider/BookDropAddProvider";
 import { UserDbProvider } from "@/lib/dexie/db";
+import { ConflictInbox } from "@/features/sync/ConflictInbox";
 
 function DashboardContent({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -31,6 +32,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
           </SidebarProvider>
         </BookAddProvider>
         <SearchLauncher />
+        <ConflictInbox />
       </SearchLauncherProvider>
     </UserDbProvider>
   );

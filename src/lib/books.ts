@@ -137,6 +137,7 @@ export async function updateBook(
   const now = Date.now();
   const book = await db.books.get(bookId);
   if (!book) throw new Error("Book not found");
+  if (book.syncStatus === "conflict") throw new Error("Book has unresolved conflict — resolve it first");
 
   await db.books.where("id").equals(bookId).modify({ ...updates, updatedAt: now });
 
@@ -164,6 +165,7 @@ export async function softDeleteBook(
 ): Promise<void> {
   const book = await db.books.get(bookId);
   if (!book) throw new Error("Book not found");
+  if (book.syncStatus === "conflict") throw new Error("Book has unresolved conflict — resolve it first");
 
   const now = Date.now();
 

@@ -4,6 +4,7 @@ import { pullFromCloud } from "@/features/sync/pull";
 import { planCoverDownloads } from "@/features/sync/filePlanner";
 import { getPendingCount } from "@/lib/outbox";
 import AuthAPI from "@/features/supabase/auth/auth.service";
+import { toast } from "sonner";
 
 const INTERVAL_MS = 60_000;
 const DEBOUNCE_MS = 500;
@@ -147,6 +148,20 @@ class SyncEngine {
       const db = getDb();
 
       const pushResult = await pushOutbox(db, user.id);
+
+      if (pushResult.newConflicts.length > 0) {
+        for (const conflict of pushResult.newConflicts) {
+          const title = conflict.title ?? "Untitled";
+          toast(`Conflict: ${title} — tap to resolve`, {
+            action: {
+              label: "View",
+              onClick: () => {
+                window.dispatchEvent(new CustomEvent("open-conflict-inbox"));
+              },
+            },
+          });
+        }
+      }
 
       if (pushResult.paused) {
         this.setState({

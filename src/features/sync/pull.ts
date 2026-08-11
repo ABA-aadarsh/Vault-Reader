@@ -63,6 +63,11 @@ async function pendingEntityIds(db: BookVaultDexie): Promise<Set<string>> {
   return new Set(operations.map((operation) => `${operation.entityType}:${operation.entityId}`));
 }
 
+async function conflictedEntityIds(db: BookVaultDexie): Promise<Set<string>> {
+  const conflicts = await db.conflicts.where("status").equals("open").toArray();
+  return new Set(conflicts.map((c) => `${c.entityType}:${c.entityId}`));
+}
+
 async function applyBook(
   db: BookVaultDexie,
   cloudBook: Record<string, unknown>,
@@ -200,12 +205,17 @@ export async function pullBooks(db: BookVaultDexie, userId: string): Promise<{ c
 
   const rows = (data ?? []) as Array<Record<string, unknown>>;
   const pendingIds = await pendingEntityIds(db);
+  const conflictedIds = await conflictedEntityIds(db);
   let processed = 0;
   let lastCursor = cursor;
 
   for (const row of rows) {
     const id = row.id as string;
     if (isPending("book", id, pendingIds)) break;
+    if (isPending("book", id, conflictedIds)) {
+      lastCursor = { updatedAt: row.updated_at as string, id };
+      continue;
+    }
 
     const existing = await db.books.get(id);
     if (!existing || Number(row.revision) > existing.baseRevision) {
@@ -239,12 +249,17 @@ export async function pullNotes(db: BookVaultDexie, userId: string): Promise<{ c
 
   const rows = (data ?? []) as Array<Record<string, unknown>>;
   const pendingIds = await pendingEntityIds(db);
+  const conflictedIds = await conflictedEntityIds(db);
   let processed = 0;
   let lastCursor = cursor;
 
   for (const row of rows) {
     const id = row.book_id as string;
     if (isPending("note", id, pendingIds)) break;
+    if (isPending("note", id, conflictedIds)) {
+      lastCursor = { updatedAt: row.updated_at as string, id };
+      continue;
+    }
     if (!await db.books.get(id)) break;
 
     const existing = await db.notes.get(id);

@@ -29,6 +29,10 @@ export async function upsertNote(
   const existing = await db.notes.get(bookId);
   const book = await db.books.get(bookId);
 
+  if (existing && existing.syncStatus === "conflict") {
+    throw new Error("Note has unresolved conflict — resolve it first");
+  }
+
   if (existing) {
     // Update existing note
     await db.notes.where("bookId").equals(bookId).modify({
@@ -85,6 +89,7 @@ export async function deleteNote(
 ): Promise<void> {
   const note = await db.notes.get(bookId);
   if (!note) return;
+  if (note.syncStatus === "conflict") throw new Error("Note has unresolved conflict — resolve it first");
 
   const book = await db.books.get(bookId);
   const now = Date.now();

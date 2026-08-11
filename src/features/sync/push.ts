@@ -1,6 +1,8 @@
 import type { BookVaultDexie } from "@/lib/dexie/schema";
-import type { OutboxEntry } from "@/lib/dexie/types";
+import type { OutboxEntry, BookEntry, NoteEntry } from "@/lib/dexie/types";
 import { supabase } from "@/features/supabase/index";
+import { attemptAutoMerge } from "@/features/sync/policy";
+import { createConflict } from "@/features/sync/conflicts";
 
 const FILE_NAME = process.env.NEXT_PUBLIC_SUPABASE_BUCKET_FILE_NAME!;
 const IMAGE_NAME = process.env.NEXT_PUBLIC_SUPABASE_BUCKET_IMAGE_NAME!;
@@ -202,6 +204,261 @@ async function softDeleteNote(
   return { revision: data.revision };
 }
 
+// ── Remote snapshot fetch ────────────────────────────────────
+
+async function fetchRemoteBook(
+  bookId: string,
+  userId: string,
+): Promise<Record<string, unknown> | null> {
+  const { data, error } = await supabase
+    .from("books")
+    .select("*")
+    .eq("id", bookId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) return null;
+  return data as Record<string, unknown>;
+}
+
+async function fetchRemoteNote(
+  bookId: string,
+  userId: string,
+): Promise<Record<string, unknown> | null> {
+  const { data, error } = await supabase
+    .from("notes")
+    .select("*")
+    .eq("book_id", bookId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) return null;
+  return data as Record<string, unknown>;
+}
+
+// ── Conflict handling ────────────────────────────────────────
+
+async function handleBookConflict(
+  db: BookVaultDexie,
+  userId: string,
+  entry: OutboxEntry,
+  local: BookEntry,
+): Promise<{ entityType: string; entityId: string; title?: string } | null> {
+  const remote = await fetchRemoteBook(entry.entityId, userId);
+  if (!remote) {
+    await db.outbox.update(entry.id!, {
+      attempts: (entry.attempts ?? 0) + 1,
+      lastError: "Failed to fetch remote snapshot",
+      errorClass: "permanent",
+    });
+    return null;
+  }
+
+  const remoteBook: BookEntry = {
+    id: remote.id as string,
+    title: (remote.title as string) ?? "",
+    author: (remote.author as string) ?? "",
+    tags: (remote.tags as string[]) ?? [],
+    isFavourite: Boolean(remote.is_favourite),
+    fileId: (remote.file_id as string) ?? "",
+    imageId: (remote.image_id as string) ?? null,
+    syncScope: "cloud",
+    revision: Number(remote.revision),
+    baseRevision: Number(remote.revision),
+    deletedAt: remote.deleted_at ? Date.parse(remote.deleted_at as string) : null,
+    fileSyncStatus: "not_downloaded",
+    coverSyncStatus: "not_downloaded",
+    syncStatus: "synced",
+    updatedAt: remote.updated_at ? Date.parse(remote.updated_at as string) : Date.now(),
+    updatedByDeviceId: "",
+  };
+
+  if (remoteBook.deletedAt) {
+    await createConflict(
+      db,
+      "book",
+      entry.entityId,
+      local as unknown as Record<string, unknown>,
+      remote,
+      "update_vs_delete",
+    );
+    await db.outbox.delete(entry.id!);
+    return { entityType: "book", entityId: entry.entityId, title: local.title };
+  }
+
+  const payload = {
+    title: local.title,
+    author: local.author,
+    tags: local.tags,
+    isFavourite: local.isFavourite,
+    fileId: local.fileId,
+    imageId: local.imageId,
+    ...entry.payload,
+  };
+
+  const { merged, clashingFields } = attemptAutoMerge(local, remoteBook, payload);
+
+  if (merged && clashingFields.length === 0) {
+    await db.books.where("id").equals(entry.entityId).modify({
+      title: merged.title,
+      author: merged.author,
+      tags: merged.tags,
+      isFavourite: merged.isFavourite,
+      syncStatus: "pending",
+      updatedAt: Date.now(),
+    });
+
+    await db.outbox.update(entry.id!, {
+      payload: {
+        title: merged.title,
+        author: merged.author,
+        tags: merged.tags,
+        isFavourite: merged.isFavourite,
+        fileId: merged.fileId,
+        imageId: merged.imageId,
+      },
+      baseRevision: remoteBook.revision,
+      attempts: 0,
+      nextAttemptAt: 0,
+      lastError: undefined,
+      errorClass: undefined,
+    });
+    return null;
+  }
+
+  await createConflict(
+    db,
+    "book",
+    entry.entityId,
+    local as unknown as Record<string, unknown>,
+    remote,
+    "field_clash",
+  );
+  await db.outbox.delete(entry.id!);
+  return { entityType: "book", entityId: entry.entityId, title: local.title };
+}
+
+async function handleNoteConflict(
+  db: BookVaultDexie,
+  userId: string,
+  entry: OutboxEntry,
+  local: NoteEntry,
+): Promise<{ entityType: string; entityId: string; title?: string } | null> {
+  const remote = await fetchRemoteNote(entry.entityId, userId);
+  if (!remote) {
+    await db.outbox.update(entry.id!, {
+      attempts: (entry.attempts ?? 0) + 1,
+      lastError: "Failed to fetch remote snapshot",
+      errorClass: "permanent",
+    });
+    return null;
+  }
+
+  const remoteBody = (remote.body as string) ?? "";
+  const localBody = local.body;
+
+  if (remoteBody === localBody) {
+    await db.notes.where("bookId").equals(entry.entityId).modify({
+      syncStatus: "synced",
+      revision: Number(remote.revision),
+      baseRevision: Number(remote.revision),
+    });
+    await db.outbox.delete(entry.id!);
+    return null;
+  }
+
+  if (remote.deleted_at) {
+    await createConflict(
+      db,
+      "note",
+      entry.entityId,
+      local as unknown as Record<string, unknown>,
+      remote,
+      "update_vs_delete",
+    );
+    await db.outbox.delete(entry.id!);
+    const book = await db.books.get(entry.entityId);
+    return { entityType: "note", entityId: entry.entityId, title: book?.title };
+  }
+
+  await createConflict(
+    db,
+    "note",
+    entry.entityId,
+    local as unknown as Record<string, unknown>,
+    remote,
+    "note_body",
+  );
+  await db.outbox.delete(entry.id!);
+  const book = await db.books.get(entry.entityId);
+  return { entityType: "note", entityId: entry.entityId, title: book?.title };
+}
+
+async function handleDeleteConflict(
+  db: BookVaultDexie,
+  userId: string,
+  entry: OutboxEntry,
+  entityType: "book" | "note",
+): Promise<{ entityType: string; entityId: string; title?: string } | null> {
+  let remote: Record<string, unknown> | null;
+  if (entityType === "book") {
+    remote = await fetchRemoteBook(entry.entityId, userId);
+  } else {
+    remote = await fetchRemoteNote(entry.entityId, userId);
+  }
+
+  if (!remote) {
+    await db.outbox.update(entry.id!, {
+      attempts: (entry.attempts ?? 0) + 1,
+      lastError: "Failed to fetch remote snapshot",
+      errorClass: "permanent",
+    });
+    return null;
+  }
+
+  if (remote.deleted_at) {
+    if (entityType === "book") {
+      await db.books.where("id").equals(entry.entityId).modify({
+        syncStatus: "synced",
+        revision: Number(remote.revision),
+        baseRevision: Number(remote.revision),
+      });
+    } else {
+      await db.notes.where("bookId").equals(entry.entityId).modify({
+        syncStatus: "synced",
+        revision: Number(remote.revision),
+        baseRevision: Number(remote.revision),
+      });
+    }
+    await db.outbox.delete(entry.id!);
+    return null;
+  }
+
+  let localSnapshot: Record<string, unknown>;
+  let title: string | undefined;
+  if (entityType === "book") {
+    const local = await db.books.get(entry.entityId);
+    localSnapshot = (local as unknown as Record<string, unknown>) ?? {};
+    title = local?.title;
+  } else {
+    const local = await db.notes.get(entry.entityId);
+    localSnapshot = (local as unknown as Record<string, unknown>) ?? {};
+    const book = await db.books.get(entry.entityId);
+    title = book?.title;
+  }
+
+  await createConflict(
+    db,
+    entityType,
+    entry.entityId,
+    localSnapshot,
+    remote,
+    "update_vs_delete",
+  );
+  await db.outbox.delete(entry.id!);
+  return { entityType, entityId: entry.entityId, title };
+}
+
 // ── Handlers ─────────────────────────────────────────────────
 
 async function handleBookUpsert(
@@ -366,7 +623,8 @@ async function pushEntry(
 export interface PushResult {
   pushed: number;
   failed: number;
-  paused: boolean; // true if auth error paused the engine
+  paused: boolean;
+  newConflicts: Array<{ entityType: string; entityId: string; title?: string }>;
 }
 
 export async function pushOutbox(
@@ -381,13 +639,14 @@ export async function pushOutbox(
     .filter((e) => e.nextAttemptAt <= now)
     .sort((a, b) => sortKey(a) - sortKey(b));
 
-  if (ops.length === 0) return { pushed: 0, failed: 0, paused: false };
+  if (ops.length === 0) return { pushed: 0, failed: 0, paused: false, newConflicts: [] };
 
   console.log(`[Push] Processing ${ops.length} outbox entries`);
 
   let pushed = 0;
   let failed = 0;
   let paused = false;
+  const newConflicts: Array<{ entityType: string; entityId: string; title?: string }> = [];
 
   for (const entry of ops) {
     try {
@@ -400,27 +659,42 @@ export async function pushOutbox(
 
       if (errorClass === "auth") {
         paused = true;
-        // Don't schedule retry — engine pauses until re-auth
         await db.outbox.update(entry.id!, {
           attempts,
           lastError: error instanceof Error ? error.message : String(error),
           errorClass,
         });
-        break; // stop processing — auth failure pauses everything
+        break;
       }
 
-      if (errorClass === "conflict" || attempts >= MAX_ATTEMPTS) {
-        // Permanent stop — needs user intervention (Phase 7 for conflicts)
+      if (errorClass === "conflict") {
+        let conflictInfo: { entityType: string; entityId: string; title?: string } | null = null;
+        if (entry.op === "upsert" || entry.op === "promote") {
+          if (entry.entityType === "book") {
+            const local = await db.books.get(entry.entityId);
+            if (local) conflictInfo = await handleBookConflict(db, userId, entry, local);
+          } else if (entry.entityType === "note") {
+            const local = await db.notes.get(entry.entityId);
+            if (local) conflictInfo = await handleNoteConflict(db, userId, entry, local);
+          }
+        } else if (entry.op === "delete") {
+          conflictInfo = await handleDeleteConflict(db, userId, entry, entry.entityType as "book" | "note");
+        }
+        if (conflictInfo) newConflicts.push(conflictInfo);
+        failed++;
+        continue;
+      }
+
+      if (attempts >= MAX_ATTEMPTS) {
         await db.outbox.update(entry.id!, {
           attempts,
           lastError: error instanceof Error ? error.message : String(error),
-          errorClass: errorClass === "conflict" ? "conflict" : "permanent",
+          errorClass: "permanent",
         });
         failed++;
         continue;
       }
 
-      // Transient or permanent — schedule retry
       await db.outbox.update(entry.id!, {
         attempts,
         lastError: error instanceof Error ? error.message : String(error),
@@ -432,5 +706,5 @@ export async function pushOutbox(
   }
 
   console.log(`[Push] Done: ${pushed} pushed, ${failed} failed, paused=${paused}`);
-  return { pushed, failed, paused };
+  return { pushed, failed, paused, newConflicts };
 }

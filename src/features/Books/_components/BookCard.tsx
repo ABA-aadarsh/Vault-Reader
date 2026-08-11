@@ -9,11 +9,8 @@ import {
   AlertTriangle,
   CheckCircle,
   Trash2,
+  Pencil,
 } from "lucide-react";
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { ConfirmationDialog } from "@/components/shared/ConfirmationDialog";
-import { useDeleteBook } from "@/features/Books/hooks/useDeleteBook";
 
 export type VersionStatus = "consistent" | "behind" | "colliding";
 
@@ -29,6 +26,7 @@ export type Book = {
   note?: string;
   image?: string | null;
   imageId?: string | null;
+  syncStatus?: "synced" | "pending" | "conflict" | "failed";
 };
 
 type BookCardProps = {
@@ -36,6 +34,8 @@ type BookCardProps = {
   type?: "grid" | "list";
   versionStatus?: VersionStatus;
   onDeleted?: () => void;
+  onEdit?: (book: Book) => void;
+  onDelete?: (book: Book) => void;
 };
 
 export const BookCard = ({
@@ -43,13 +43,12 @@ export const BookCard = ({
   type = "grid",
   versionStatus = "consistent",
   onDeleted,
+  onEdit,
+  onDelete,
 }: BookCardProps) => {
   const router = useRouter();
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const deleteBook = useDeleteBook();
 
   const {
-    docId,
     title,
     author,
     tags,
@@ -63,22 +62,14 @@ export const BookCard = ({
     router.push(`/dashboard/book/${fileId}`);
   };
 
-  const handleDelete = async (e: React.MouseEvent) => {
+  const handleEdit = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setShowDeleteDialog(true);
+    onEdit?.(book);
   };
 
-  const confirmDelete = async () => {
-    try {
-      await deleteBook.mutateAsync({ bookId: docId });
-      setShowDeleteDialog(false);
-      if (onDeleted) {
-        onDeleted();
-      }
-    } catch (error) {
-      console.error("Error deleting book:", error);
-      alert("Failed to delete book. Please try again.");
-    }
+  const handleDelete = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onDelete?.(book);
   };
 
   const renderVersionIcon = () => {
@@ -137,11 +128,15 @@ export const BookCard = ({
             {renderVersionIcon()}
             <button
               type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                handleDelete(e);
-              }}
+              onClick={handleEdit}
+              className="text-muted-foreground hover:text-foreground transition-colors"
+              title="Edit book"
+            >
+              <Pencil className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={handleDelete}
               className="text-red-400 hover:text-destructive transition-colors"
               title="Delete book"
             >
@@ -149,18 +144,6 @@ export const BookCard = ({
             </button>
           </div>
         </div>
-
-        <ConfirmationDialog
-          open={showDeleteDialog}
-          onOpenChange={setShowDeleteDialog}
-          title="Delete Book"
-          description={`Are you sure you want to delete "${title}"? This action cannot be undone.`}
-          onConfirm={confirmDelete}
-          isLoading={deleteBook.isPending}
-          confirmText="Delete"
-          cancelText="Cancel"
-          variant="destructive"
-        />
       </div>
     );
   }
@@ -207,29 +190,21 @@ export const BookCard = ({
         {renderVersionIcon()}
         <button
           type="button"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            handleDelete(e);
-          }}
+          onClick={handleEdit}
+          className="text-muted-foreground hover:text-foreground transition-colors"
+          title="Edit book"
+        >
+          <Pencil className="w-4 h-4" />
+        </button>
+        <button
+          type="button"
+          onClick={handleDelete}
           className="text-red-400 hover:text-destructive transition-colors"
           title="Delete book"
         >
           <Trash2 className="w-4 h-4" />
         </button>
       </div>
-
-      <ConfirmationDialog
-        open={showDeleteDialog}
-        onOpenChange={setShowDeleteDialog}
-        title="Delete Book"
-        description={`Are you sure you want to delete "${title}"? This action cannot be undone.`}
-        onConfirm={confirmDelete}
-        isLoading={deleteBook.isPending}
-        confirmText="Delete"
-        cancelText="Cancel"
-        variant="destructive"
-      />
     </div>
   );
 };

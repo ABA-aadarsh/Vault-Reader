@@ -10,6 +10,7 @@ export function SyncStatusChip() {
   let label: string;
   let icon: React.ReactNode;
   let className: string;
+  let clickable = false;
 
   if (status === "error") {
     label = "Error";
@@ -18,7 +19,8 @@ export function SyncStatusChip() {
   } else if (conflictCount > 0) {
     label = `Conflicts(${conflictCount})`;
     icon = <AlertTriangle className="w-3 h-3" />;
-    className = "bg-amber-500/10 text-amber-600 border-amber-500/20";
+    className = "bg-amber-500/10 text-amber-600 border-amber-500/20 cursor-pointer hover:bg-amber-500/20 transition-colors";
+    clickable = true;
   } else if (status === "syncing") {
     label = "Syncing";
     icon = <RefreshCw className="w-3 h-3 animate-spin" />;
@@ -41,8 +43,19 @@ export function SyncStatusChip() {
     className = "bg-emerald-500/10 text-emerald-600 border-emerald-500/20";
   }
 
+  function handleClick() {
+    if (clickable) {
+      window.dispatchEvent(new CustomEvent("open-conflict-inbox"));
+    }
+  }
+
   return (
-    <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs border ${className}`}>
+    <div
+      className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs border ${className}`}
+      onClick={handleClick}
+      role={clickable ? "button" : undefined}
+      tabIndex={clickable ? 0 : undefined}
+    >
       {icon}
       <span>{label}</span>
     </div>
