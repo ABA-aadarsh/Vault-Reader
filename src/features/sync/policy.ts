@@ -20,9 +20,9 @@ export function attemptAutoMerge(
     const remoteValue = remote[field as keyof BookEntry];
     const payloadValue = payload[field];
 
-    if (payloadValue === undefined) continue;
+    if (remoteValue === undefined) continue;
 
-    const localChanged = payloadValue !== localValue;
+    const localChanged = field in payload;
     const remoteChanged = remoteValue !== localValue;
 
     if (localChanged && remoteChanged) {

@@ -3,6 +3,7 @@ import type { OutboxEntry, BookEntry, NoteEntry } from "@/lib/dexie/types";
 import { supabase } from "@/features/supabase/index";
 import { attemptAutoMerge } from "@/features/sync/policy";
 import { createConflict } from "@/features/sync/conflicts";
+import { cloudBookToSnapshot, cloudNoteToSnapshot } from "@/lib/mappers";
 
 const FILE_NAME = process.env.NEXT_PUBLIC_SUPABASE_BUCKET_FILE_NAME!;
 const IMAGE_NAME = process.env.NEXT_PUBLIC_SUPABASE_BUCKET_IMAGE_NAME!;
@@ -273,13 +274,15 @@ async function handleBookConflict(
     updatedByDeviceId: "",
   };
 
+  const remoteSnapshot = cloudBookToSnapshot(remote);
+
   if (remoteBook.deletedAt) {
     await createConflict(
       db,
       "book",
       entry.entityId,
       local as unknown as Record<string, unknown>,
-      remote,
+      remoteSnapshot,
       "update_vs_delete",
     );
     await db.outbox.delete(entry.id!);
@@ -331,7 +334,7 @@ async function handleBookConflict(
     "book",
     entry.entityId,
     local as unknown as Record<string, unknown>,
-    remote,
+    remoteSnapshot,
     "field_clash",
   );
   await db.outbox.delete(entry.id!);
@@ -357,6 +360,8 @@ async function handleNoteConflict(
   const remoteBody = (remote.body as string) ?? "";
   const localBody = local.body;
 
+  const remoteNote = cloudNoteToSnapshot(remote);
+
   if (remoteBody === localBody) {
     await db.notes.where("bookId").equals(entry.entityId).modify({
       syncStatus: "synced",
@@ -373,7 +378,7 @@ async function handleNoteConflict(
       "note",
       entry.entityId,
       local as unknown as Record<string, unknown>,
-      remote,
+      remoteNote,
       "update_vs_delete",
     );
     await db.outbox.delete(entry.id!);
@@ -386,7 +391,7 @@ async function handleNoteConflict(
     "note",
     entry.entityId,
     local as unknown as Record<string, unknown>,
-    remote,
+    remoteNote,
     "note_body",
   );
   await db.outbox.delete(entry.id!);
@@ -436,6 +441,10 @@ async function handleDeleteConflict(
 
   let localSnapshot: Record<string, unknown>;
   let title: string | undefined;
+  const normalizedRemote = entityType === "book"
+    ? cloudBookToSnapshot(remote)
+    : cloudNoteToSnapshot(remote);
+
   if (entityType === "book") {
     const local = await db.books.get(entry.entityId);
     localSnapshot = (local as unknown as Record<string, unknown>) ?? {};
@@ -452,7 +461,7 @@ async function handleDeleteConflict(
     entityType,
     entry.entityId,
     localSnapshot,
-    remote,
+    normalizedRemote,
     "update_vs_delete",
   );
   await db.outbox.delete(entry.id!);
