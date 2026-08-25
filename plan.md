@@ -84,10 +84,7 @@ Build a **cloud-coordinated multi-master**, offline-first sync system for a **si
 
 Most original gaps are resolved. Remaining gaps:
 
-- No conflict detection/UI (Phase 7)
-- No promote UX flow (Phase 8)
-- No recently deleted / restore UI (Phase 8)
-- No server tombstone GC (Phase 8)
+- No server tombstone GC (deferred from Phase 8)
 - No session expiry banner (Phase 9)
 - No progress sync toggle (Phase 10)
 - No test runner (Phase 11)
@@ -643,27 +640,70 @@ While conflict open: pause sync **only for that entity**; rest continues.
 
 ---
 
-### Phase 7 — Conflicts
+### Phase 7 — Conflicts *(completed)*
 
-7.1 On CAS fail: write `conflicts` + snapshots
-7.2 Auto field-merge implementation for meta
-7.3 Progress max-merge (when enabled)
-7.4 Conflict inbox UI list
-7.5 Resolvers: keep mine / keep theirs / merge fields / note side-by-side / update-vs-delete
-7.6 On resolve: write local winner, enqueue push with correct `baseRevision` (= remote.revision), clear conflict
-7.7 Status chip conflict count + toast
+7.1 On CAS fail: write `conflicts` + snapshots *(done)*
+7.2 Auto field-merge implementation for meta *(done)*
+7.3 Progress max-merge (when enabled) *(deferred to Phase 10 — no readingState outbox yet)*
+7.4 Conflict inbox UI list *(done)*
+7.5 Resolvers: keep mine / keep theirs / merge fields / note side-by-side / update-vs-delete *(done)*
+7.6 On resolve: write local winner, enqueue push with correct `baseRevision` (= remote.revision), clear conflict *(done)*
+7.7 Status chip conflict count + toast *(done)*
+
+**Decisions locked for Phase 7 (implemented directly, not via grilling):**
+- Auto field-merge: `title`/`author` clash → field_clash inbox; `tags` → set-union; `isFavourite` → remote wins (LWW)
+- Resolvers: field picker (per-field local/remote), note side-by-side, update-vs-delete (restore / confirm delete)
+- Conflict entry points: `push.ts` `handleBookConflict` / `handleNoteConflict` / `handleDeleteConflict`
+- Inbox: `ConflictInbox` Sheet (mounted in dashboard layout), opened via `open-conflict-inbox` event + chip click
+
+**Files created:**
+- `src/features/sync/policy.ts` — `attemptAutoMerge`
+- `src/features/sync/conflicts.ts` — create/resolve/restore/confirm-delete + getters
+- `src/features/sync/ConflictInbox.tsx` — Sheet list
+- `src/features/sync/resolvers/FieldClashResolver.tsx`
+- `src/features/sync/resolvers/NoteBodyResolver.tsx`
+- `src/features/sync/resolvers/UpdateVsDeleteResolver.tsx`
+
+**Files modified:**
+- `src/features/sync/push.ts` — conflict detection + outbox removal on conflict
+- `src/features/sync/SyncEngine.ts` — conflict toast + chip count
 
 **Exit:** deliberate conflict scenarios resolvable without stuck sync.
 
 ---
 
-### Phase 8 — Promote, scope, delete UX
+### Phase 8 — Promote, scope, delete UX *(completed — 8.5 deferred)*
 
-8.1 Promote local→cloud flow + confirm
-8.2 Block demote (no UI)
-8.3 Delete copy: “Delete from library (all devices)” vs “Remove download”
-8.4 Recently deleted + restore (30d client; server GC job)
-8.5 Server tombstone GC (SQL cron / edge) + storage orphan sweep
+8.1 Promote local→cloud flow + confirm *(done)*
+8.2 Block demote (no UI) *(done — no demote path exists)*
+8.3 Delete copy: "Delete from library (all devices)" vs "Remove download" *(done)*
+8.4 Recently deleted + restore (30d client purge) *(done — UI + restore + 30d client purge)*
+8.5 Server tombstone GC (SQL cron / edge) + storage orphan sweep *(deferred)*
+
+**Decisions locked for Phase 8 (grilling session):**
+- Recently deleted: build restore UI (sidebar entry → Sheet), not silent tombstones
+- Per-book actions: kebab dropdown menu (replaces inline pencil/trash)
+- Server GC: deferred; client-side 30-day purge only (in `SyncEngine.runCycle`)
+- Recently deleted placement: sidebar "Manage" entry → right-side Sheet (`open-recently-deleted` event)
+- Promote gating: disabled only on expired session (offline promotes queue in outbox)
+
+**Files created:**
+- `src/features/Books/_components/BookMenu.tsx` — kebab dropdown (Edit / Promote / Remove download / Delete)
+- `src/features/Books/_components/RecentlyDeletedSheet.tsx` — restore / delete-forever
+- `src/features/Books/hooks/usePromoteBook.ts`
+- `src/features/Books/hooks/useRemoveDownload.ts`
+- `src/features/Books/hooks/useRestoreBook.ts`
+- `src/features/Books/hooks/useRecentlyDeleted.ts`
+
+**Files modified:**
+- `src/lib/books.ts` — `listDeletedBooks`, `removeDownload`, `purgeExpiredTombstones`; `hardPurgeLocal` now purges note + readingState
+- `src/lib/dexie/index.ts` — new exports
+- `src/features/sync/SyncEngine.ts` — `purgeExpiredTombstones` after pull
+- `src/features/Books/_components/BookCard.tsx` — BookMenu replaces inline edit/delete; added `syncScope`/`fileSyncStatus` to UI Book type
+- `src/features/Books/hooks/useDeleteBook.ts` — invalidate `deletedBooks`
+- `src/app/dashboard/page.tsx` — scope-aware delete copy, promote dialog, remove-download handler, `versionStatus` from real `syncStatus`
+- `src/components/shared/SidebarContainer.tsx` — "Recently deleted" entry
+- `src/app/dashboard/layout.tsx` — mount `RecentlyDeletedSheet`
 
 **Exit:** lifecycle matches product language.
 
@@ -792,4 +832,4 @@ While conflict open: pause sync **only for that entity**; rest continues.
 
 ---
 
-*Plan approved from grilling session. Phases 0-6 are implemented; next implementation target is Phase 7 (Conflicts).*
+*Plan approved from grilling session. Phases 0-8 are implemented; next implementation target is Phase 9 (Auth offline UX).*

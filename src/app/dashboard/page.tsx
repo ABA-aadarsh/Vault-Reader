@@ -1,6 +1,6 @@
 "use client";
 
-import { Book, BookCard } from "@/features/Books/_components/BookCard";
+import { Book, BookCard, type VersionStatus } from "@/features/Books/_components/BookCard";
 import { useState, useEffect } from "react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { LayoutGrid, List } from "lucide-react";
@@ -13,7 +13,21 @@ import { getImageBlob } from "@/lib/images";
 import { ConfirmationDialog } from "@/components/shared/ConfirmationDialog";
 import { EditBookDialog } from "@/features/Books/_components/EditBookDialog";
 import { useDeleteBook } from "@/features/Books/hooks/useDeleteBook";
+import { usePromoteBook } from "@/features/Books/hooks/usePromoteBook";
+import { useRemoveDownload } from "@/features/Books/hooks/useRemoveDownload";
 import { toast } from "sonner";
+
+function versionStatusFrom(syncStatus?: string): VersionStatus {
+  switch (syncStatus) {
+    case "conflict":
+    case "failed":
+      return "colliding";
+    case "pending":
+      return "behind";
+    default:
+      return "consistent";
+  }
+}
 
 export default function Page() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -21,9 +35,12 @@ export default function Page() {
   const [booksWithImages, setBooksWithImages] = useState<Book[]>([]);
   const db = useDb();
   const deleteBook = useDeleteBook();
+  const promoteBook = usePromoteBook();
+  const removeDownload = useRemoveDownload();
 
   const [editingBook, setEditingBook] = useState<Book | null>(null);
   const [deletingBook, setDeletingBook] = useState<Book | null>(null);
+  const [promotingBook, setPromotingBook] = useState<Book | null>(null);
 
   // Fetch image blobs for local books and create blob URLs
   useEffect(() => {
@@ -41,6 +58,8 @@ export default function Page() {
             isFavourite: book.isFavourite,
             imageId: book.imageId,
             syncStatus: book.syncStatus,
+            syncScope: book.syncScope,
+            fileSyncStatus: book.fileSyncStatus,
           };
           try {
             if (book.imageId) {
@@ -84,6 +103,8 @@ export default function Page() {
         isFavourite: b.isFavourite,
         imageId: b.imageId,
         syncStatus: b.syncStatus,
+        syncScope: b.syncScope,
+        fileSyncStatus: b.fileSyncStatus,
       } as Book));
 
   const handleConfirmDelete = async () => {
@@ -96,6 +117,28 @@ export default function Page() {
     } catch (error) {
       console.error("Error deleting book:", error);
       toast.error("Failed to delete book");
+    }
+  };
+
+  const handleConfirmPromote = async () => {
+    if (!promotingBook) return;
+    try {
+      await promoteBook.mutateAsync(promotingBook.docId);
+      setPromotingBook(null);
+      toast.success("Book promoted to cloud");
+    } catch (error) {
+      console.error("Error promoting book:", error);
+      toast.error("Failed to promote book");
+    }
+  };
+
+  const handleRemoveDownload = async (book: Book) => {
+    try {
+      await removeDownload.mutateAsync(book.docId);
+      toast.success("Download removed");
+    } catch (error) {
+      console.error("Error removing download:", error);
+      toast.error("Failed to remove download");
     }
   };
 
@@ -133,31 +176,31 @@ export default function Page() {
 
       {viewMode === "grid" ? (
         <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
-          {displayBooks?.map((book, i) => (
+          {displayBooks?.map((book) => (
             <BookCard
               key={book.fileId}
               book={book}
               type="grid"
-              versionStatus={
-                i === 0 ? "consistent" : i === 1 ? "behind" : "colliding"
-              }
+              versionStatus={versionStatusFrom(book.syncStatus)}
               onEdit={setEditingBook}
               onDelete={setDeletingBook}
+              onPromote={setPromotingBook}
+              onRemoveDownload={handleRemoveDownload}
             />
           ))}
         </div>
       ) : (
         <div className="space-y-4">
-          {displayBooks?.map((book, i) => (
+          {displayBooks?.map((book) => (
             <BookCard
               key={book.fileId}
               book={book}
               type="list"
-              versionStatus={
-                i === 0 ? "consistent" : i === 1 ? "behind" : "colliding"
-              }
+              versionStatus={versionStatusFrom(book.syncStatus)}
               onEdit={setEditingBook}
               onDelete={setDeletingBook}
+              onPromote={setPromotingBook}
+              onRemoveDownload={handleRemoveDownload}
             />
           ))}
         </div>
@@ -186,7 +229,9 @@ export default function Page() {
         title="Delete Book"
         description={
           deletingBook
-            ? `Are you sure you want to delete "${deletingBook.title}"? This action cannot be undone.`
+            ? deletingBook.syncScope === "local"
+              ? `Are you sure you want to delete "${deletingBook.title}"? This will permanently remove it from this device.`
+              : `Are you sure you want to delete "${deletingBook.title}"? It will be removed from your library on all devices. You can restore it from Recently deleted for 30 days.`
             : ""
         }
         onConfirm={handleConfirmDelete}
@@ -194,6 +239,23 @@ export default function Page() {
         confirmText="Delete"
         cancelText="Cancel"
         variant="destructive"
+      />
+
+      {/* Promote dialog — rendered at page level, outside any card */}
+      <ConfirmationDialog
+        open={!!promotingBook}
+        onOpenChange={(open) => { if (!open) setPromotingBook(null); }}
+        title="Promote to cloud"
+        description={
+          promotingBook
+            ? `Upload "${promotingBook.title}" to your cloud library? It will sync across your devices.`
+            : ""
+        }
+        onConfirm={handleConfirmPromote}
+        isLoading={promoteBook.isPending}
+        confirmText="Promote"
+        cancelText="Cancel"
+        variant="default"
       />
     </div>
   );
