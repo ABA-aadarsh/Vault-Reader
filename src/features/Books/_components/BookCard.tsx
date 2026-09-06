@@ -8,9 +8,8 @@ import {
   RefreshCcw,
   AlertTriangle,
   CheckCircle,
-  Trash2,
-  Pencil,
 } from "lucide-react";
+import { BookMenu } from "./BookMenu";
 
 export type VersionStatus = "consistent" | "behind" | "colliding";
 
@@ -27,6 +26,8 @@ export type Book = {
   image?: string | null;
   imageId?: string | null;
   syncStatus?: "synced" | "pending" | "conflict" | "failed";
+  syncScope?: "local" | "cloud";
+  fileSyncStatus?: "not_downloaded" | "downloading" | "present" | "failed";
 };
 
 type BookCardProps = {
@@ -36,6 +37,8 @@ type BookCardProps = {
   onDeleted?: () => void;
   onEdit?: (book: Book) => void;
   onDelete?: (book: Book) => void;
+  onPromote?: (book: Book) => void;
+  onRemoveDownload?: (book: Book) => void;
 };
 
 export const BookCard = ({
@@ -45,6 +48,8 @@ export const BookCard = ({
   onDeleted,
   onEdit,
   onDelete,
+  onPromote,
+  onRemoveDownload,
 }: BookCardProps) => {
   const router = useRouter();
 
@@ -60,16 +65,6 @@ export const BookCard = ({
 
   const handleCardClick = () => {
     router.push(`/dashboard/book/${fileId}`);
-  };
-
-  const handleEdit = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onEdit?.(book);
-  };
-
-  const handleDelete = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onDelete?.(book);
   };
 
   const renderVersionIcon = () => {
@@ -126,22 +121,13 @@ export const BookCard = ({
           <div className="flex items-center gap-1">
             {note && <StickyNote className="text-muted w-4 h-4" />}
             {renderVersionIcon()}
-            <button
-              type="button"
-              onClick={handleEdit}
-              className="text-muted-foreground hover:text-foreground transition-colors"
-              title="Edit book"
-            >
-              <Pencil className="w-4 h-4" />
-            </button>
-            <button
-              type="button"
-              onClick={handleDelete}
-              className="text-red-400 hover:text-destructive transition-colors"
-              title="Delete book"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
+            <BookMenu
+              book={book}
+              onEdit={onEdit}
+              onPromote={onPromote}
+              onRemoveDownload={onRemoveDownload}
+              onDelete={onDelete}
+            />
           </div>
         </div>
       </div>
@@ -188,22 +174,13 @@ export const BookCard = ({
       <div className="flex items-center gap-2">
         {note && <StickyNote className="text-muted w-4 h-4" />}
         {renderVersionIcon()}
-        <button
-          type="button"
-          onClick={handleEdit}
-          className="text-muted-foreground hover:text-foreground transition-colors"
-          title="Edit book"
-        >
-          <Pencil className="w-4 h-4" />
-        </button>
-        <button
-          type="button"
-          onClick={handleDelete}
-          className="text-red-400 hover:text-destructive transition-colors"
-          title="Delete book"
-        >
-          <Trash2 className="w-4 h-4" />
-        </button>
+        <BookMenu
+          book={book}
+          onEdit={onEdit}
+          onPromote={onPromote}
+          onRemoveDownload={onRemoveDownload}
+          onDelete={onDelete}
+        />
       </div>
     </div>
   );

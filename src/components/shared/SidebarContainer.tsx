@@ -17,7 +17,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import Image from "next/image";
-import { PanelLeftClose, Search, Star } from "lucide-react";
+import { PanelLeftClose, Search, Star, Trash2 } from "lucide-react";
 import { useSearchLauncher } from "@/features/Search/provider/SearchLauncherProvider";
 import { useRouter } from "next/navigation";
 import { SyncStatusChip } from "@/features/sync/SyncStatusChip";
@@ -113,6 +113,19 @@ export function AppSidebar() {
                 </li>
               ))}
             </ul>
+          </SidebarGroup>
+
+          {/* Manage Group */}
+          <SidebarGroup>
+            <h3 className="text-sm font-medium text-muted-foreground mb-2">Manage</h3>
+            <Button
+              variant="ghost"
+              className="w-full justify-start px-2 text-sm text-muted-foreground hover:text-foreground"
+              onClick={() => window.dispatchEvent(new CustomEvent("open-recently-deleted"))}
+            >
+              <Trash2 className="mr-2 w-4 h-4" />
+              Recently deleted
+            </Button>
           </SidebarGroup>
         </ScrollArea>
       </SidebarContent>

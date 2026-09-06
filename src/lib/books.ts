@@ -4,6 +4,9 @@ import { bookToDomain } from "./mappers";
 import type { Book, SyncScope } from "./domain";
 import { enqueue } from "./outbox";
 import { engine } from "@/features/sync/SyncEngine";
+import { removeFile } from "./files";
+
+const TOMBSTONE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 export interface CreateBookParams {
   title: string;
@@ -100,6 +103,18 @@ export async function listCloudBooks(db: BookVaultDexie): Promise<Book[]> {
     .where("syncScope")
     .equals("cloud")
     .and((b) => b.deletedAt === null)
+    .toArray();
+  return entries.map(bookToDomain);
+}
+
+/**
+ * List soft-deleted cloud books (Recently deleted).
+ */
+export async function listDeletedBooks(db: BookVaultDexie): Promise<Book[]> {
+  const entries = await db.books
+    .where("syncScope")
+    .equals("cloud")
+    .and((b) => b.deletedAt !== null)
     .toArray();
   return entries.map(bookToDomain);
 }
@@ -233,7 +248,8 @@ export async function restoreBook(
 }
 
 /**
- * Hard-delete a book locally: removes file blob, image blob, and book row.
+ * Hard-delete a book locally: removes file blob, image blob, note,
+ * reading state, and book row.
  * Used for local-only books or after cloud soft-delete is confirmed.
  */
 export async function hardPurgeLocal(
@@ -247,7 +263,48 @@ export async function hardPurgeLocal(
   if (book.imageId) {
     await db.images.where("imageId").equals(book.imageId).delete();
   }
+  await db.notes.where("bookId").equals(bookId).delete();
+  await db.readingState.where("bookId").equals(bookId).delete();
   await db.books.where("id").equals(bookId).delete();
+}
+
+/**
+ * Remove a downloaded PDF blob for a book, keeping metadata.
+ * No cloud change; re-opening the book re-downloads the PDF.
+ */
+export async function removeDownload(
+  db: BookVaultDexie,
+  bookId: string,
+): Promise<void> {
+  const book = await db.books.get(bookId);
+  if (!book) throw new Error("Book not found");
+
+  await removeFile(db, book.fileId);
+  await db.books
+    .where("id")
+    .equals(bookId)
+    .modify({ fileSyncStatus: "not_downloaded" });
+}
+
+/**
+ * Hard-purge cloud tombstones older than 30 days (book + note + blobs).
+ * Server-side tombstone GC is deferred; this keeps the local DB clean.
+ */
+export async function purgeExpiredTombstones(
+  db: BookVaultDexie,
+): Promise<number> {
+  const cutoff = Date.now() - TOMBSTONE_TTL_MS;
+  const expired = await db.books
+    .where("syncScope")
+    .equals("cloud")
+    .and((b) => b.deletedAt !== null && b.deletedAt < cutoff)
+    .toArray();
+
+  for (const book of expired) {
+    await hardPurgeLocal(db, book.id);
+  }
+
+  return expired.length;
 }
 
 /**

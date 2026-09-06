@@ -3,6 +3,7 @@ import { pushOutbox } from "@/features/sync/push";
 import { pullFromCloud } from "@/features/sync/pull";
 import { planCoverDownloads } from "@/features/sync/filePlanner";
 import { getPendingCount } from "@/lib/outbox";
+import { purgeExpiredTombstones } from "@/lib/books";
 import AuthAPI from "@/features/supabase/auth/auth.service";
 import { toast } from "sonner";
 
@@ -173,6 +174,7 @@ class SyncEngine {
 
       const pullResult = await pullFromCloud(db, user.id);
       await planCoverDownloads(db, user.id);
+      await purgeExpiredTombstones(db);
 
       const totalPulled = pullResult.books + pullResult.notes;
       const durationMs = Date.now() - startedAt;

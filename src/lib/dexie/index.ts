@@ -26,7 +26,7 @@ export {
   readingStateToDomain,
   readingStateToDexie,
 } from "../mappers";
-export { createBook, listBooks, listCloudBooks, getBook, getBookByFileId, updateBook, softDeleteBook, restoreBook, hardPurgeLocal, promoteToCloud } from "../books";
+export { createBook, listBooks, listCloudBooks, listDeletedBooks, getBook, getBookByFileId, updateBook, softDeleteBook, restoreBook, hardPurgeLocal, promoteToCloud, removeDownload, purgeExpiredTombstones } from "../books";
 export type { CreateBookParams } from "../books";
 export { getNote, upsertNote, deleteNote } from "../notes";
 export { getReadingState, setPage } from "../readingState";

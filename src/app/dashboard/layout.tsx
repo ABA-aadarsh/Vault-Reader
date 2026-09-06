@@ -14,6 +14,7 @@ import {RequireAuth, useAuth} from "@/features/supabase/auth/components/RequireA
 import { BookAddProvider } from "@/features/Books/provider/BookDropAddProvider";
 import { UserDbProvider } from "@/lib/dexie/db";
 import { ConflictInbox } from "@/features/sync/ConflictInbox";
+import { RecentlyDeletedSheet } from "@/features/Books/_components/RecentlyDeletedSheet";
 
 function DashboardContent({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -33,6 +34,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
         </BookAddProvider>
         <SearchLauncher />
         <ConflictInbox />
+        <RecentlyDeletedSheet />
       </SearchLauncherProvider>
     </UserDbProvider>
   );
