@@ -63,6 +63,7 @@ export async function upsertNote(
       syncStatus: book?.syncScope === "cloud" ? "pending" : "synced",
       updatedAt: now,
       updatedByDeviceId: "",
+      baseSnapshot: { body },
     });
 
     // Enqueue outbox for cloud sync

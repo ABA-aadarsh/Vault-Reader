@@ -14,18 +14,26 @@ export function attemptAutoMerge(
 ): AutoMergeResult {
   const clashingFields: string[] = [];
   const merged = { ...local };
+  const base = local.baseSnapshot;
 
   for (const field of MERGEABLE_FIELDS) {
     const localValue = local[field];
     const remoteValue = remote[field as keyof BookEntry];
-    const payloadValue = payload[field];
 
     if (remoteValue === undefined) continue;
 
-    const localChanged = field in payload;
-    const remoteChanged = remoteValue !== localValue;
+    // The user edited this field locally if it appears in the outbox payload.
+    const userChanged = field in payload;
 
-    if (localChanged && remoteChanged) {
+    // The cloud diverged from our last-synced baseline only if it differs from
+    // baseSnapshot (NOT from local, which already contains our pending edits).
+    const baseValue = base?.[field];
+    const cloudChanged =
+      baseValue === undefined
+        ? remoteValue !== localValue
+        : remoteValue !== baseValue;
+
+    if (userChanged && cloudChanged) {
       if (field === "tags") {
         const localTags = new Set(local.tags);
         const remoteTags = new Set(remote.tags as string[]);
@@ -36,9 +44,10 @@ export function attemptAutoMerge(
       } else {
         clashingFields.push(field);
       }
-    } else if (remoteChanged) {
+    } else if (cloudChanged) {
       (merged as Record<string, unknown>)[field] = remoteValue;
     }
+    // else: user-only change or no change → merged head already carries local value
   }
 
   if (clashingFields.length > 0) {

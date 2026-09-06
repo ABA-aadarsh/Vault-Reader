@@ -99,6 +99,12 @@ async function applyBook(
         syncStatus: "synced",
         updatedAt,
         updatedByDeviceId: "",
+        baseSnapshot: {
+          title: (cloudBook.title as string) ?? "",
+          author: (cloudBook.author as string) ?? "",
+          tags: (cloudBook.tags as string[]) ?? [],
+          isFavourite: Boolean(cloudBook.is_favourite),
+        },
       });
     } else {
       await db.books.update(id, {
@@ -107,6 +113,12 @@ async function applyBook(
         baseRevision: revision,
         syncStatus: "synced",
         updatedAt,
+        baseSnapshot: {
+          title: (cloudBook.title as string) ?? "",
+          author: (cloudBook.author as string) ?? "",
+          tags: (cloudBook.tags as string[]) ?? [],
+          isFavourite: Boolean(cloudBook.is_favourite),
+        },
       });
       await removeFile(db, existing.fileId);
       if (existing.imageId) await removeImage(db, existing.imageId);
@@ -131,6 +143,12 @@ async function applyBook(
     coverSyncStatus: coverPresent ? "present" : "not_downloaded",
     syncStatus: "synced",
     updatedAt,
+    baseSnapshot: {
+      title: (cloudBook.title as string) ?? "",
+      author: (cloudBook.author as string) ?? "",
+      tags: (cloudBook.tags as string[]) ?? [],
+      isFavourite: Boolean(cloudBook.is_favourite),
+    },
   };
 
   if (existing) {
@@ -155,6 +173,7 @@ async function applyBook(
       syncStatus: "synced",
       updatedAt,
       updatedByDeviceId: "",
+      baseSnapshot: values.baseSnapshot,
     });
   }
 }
@@ -181,6 +200,7 @@ async function applyNote(
     syncStatus: "synced",
     updatedAt: cloudTime(cloudNote.updated_at as string | null),
     updatedByDeviceId: "",
+    baseSnapshot: { body: (cloudNote.body as string) ?? "" },
   };
 
   if (existing) await db.notes.update(bookId, values);

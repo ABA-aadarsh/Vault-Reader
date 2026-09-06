@@ -16,6 +16,19 @@ export interface BookEntry {
   updatedAt: number;
   updatedByDeviceId: string;
   origin?: string;
+  baseSnapshot?: {
+    title: string;
+    author: string;
+    tags: string[];
+    isFavourite: boolean;
+  };
+}
+
+export interface BookBaseSnapshot {
+  title: string;
+  author: string;
+  tags: string[];
+  isFavourite: boolean;
 }
 
 export interface NoteEntry {
@@ -27,6 +40,7 @@ export interface NoteEntry {
   syncStatus: "synced" | "pending" | "conflict" | "failed";
   updatedAt: number;
   updatedByDeviceId: string;
+  baseSnapshot?: { body: string };
 }
 
 export interface ReadingStateEntry {
@@ -78,6 +92,7 @@ export interface ConflictEntry {
     | "note_body";
   createdAt: number;
   status: "open" | "resolved";
+  clashingFields?: string[];
 }
 
 export interface SyncStateEntry {

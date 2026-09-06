@@ -16,6 +16,12 @@ export interface Book {
   updatedAt: number;
   updatedByDeviceId: string;
   origin?: string;
+  baseSnapshot?: {
+    title: string;
+    author: string;
+    tags: string[];
+    isFavourite: boolean;
+  };
 }
 
 export interface Note {
@@ -27,6 +33,7 @@ export interface Note {
   syncStatus: "synced" | "pending" | "conflict" | "failed";
   updatedAt: number;
   updatedByDeviceId: string;
+  baseSnapshot?: { body: string };
 }
 
 export interface ReadingState {

@@ -62,10 +62,25 @@ export function EditBookDialog({
       .map((t) => t.trim())
       .filter((t) => t.length > 0);
 
+    const updates: { title?: string; author?: string; tags?: string[]; isFavourite?: boolean } = {};
+    if (title !== initial.title) updates.title = title;
+    if (author !== initial.author) updates.author = author;
+    const sameTags =
+      tags.length === initial.tags.length &&
+      tags.every((t) => initial.tags.includes(t)) &&
+      initial.tags.every((t) => tags.includes(t));
+    if (!sameTags) updates.tags = tags;
+    if (isFavourite !== initial.isFavourite) updates.isFavourite = isFavourite;
+
+    if (Object.keys(updates).length === 0) {
+      onClose();
+      return;
+    }
+
     try {
       await updateBook.mutateAsync({
         bookId,
-        updates: { title, author, tags, isFavourite },
+        updates,
       });
       toast.success("Book updated");
       onClose();

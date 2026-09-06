@@ -24,11 +24,14 @@ export function FieldClashResolver({ conflict, onClose }: FieldClashResolverProp
   const local = conflict.localSnapshot;
   const remote = conflict.remoteSnapshot;
 
-  const clashingFields = Object.keys(FIELD_LABELS).filter((field) => {
-    const localVal = JSON.stringify(local[field]);
-    const remoteVal = JSON.stringify(remote[field]);
-    return localVal !== remoteVal;
-  });
+  const clashingFields =
+    conflict.clashingFields?.length
+      ? conflict.clashingFields
+      : Object.keys(FIELD_LABELS).filter((field) => {
+          const localVal = JSON.stringify(local[field]);
+          const remoteVal = JSON.stringify(remote[field]);
+          return localVal !== remoteVal;
+        });
 
   const [selections, setSelections] = useState<Record<string, "local" | "remote">>(() => {
     const initial: Record<string, "local" | "remote"> = {};

@@ -289,17 +289,7 @@ async function handleBookConflict(
     return { entityType: "book", entityId: entry.entityId, title: local.title };
   }
 
-  const payload = {
-    title: local.title,
-    author: local.author,
-    tags: local.tags,
-    isFavourite: local.isFavourite,
-    fileId: local.fileId,
-    imageId: local.imageId,
-    ...entry.payload,
-  };
-
-  const { merged, clashingFields } = attemptAutoMerge(local, remoteBook, payload);
+  const { merged, clashingFields } = attemptAutoMerge(local, remoteBook, entry.payload);
 
   if (merged && clashingFields.length === 0) {
     await db.books.where("id").equals(entry.entityId).modify({
@@ -336,6 +326,7 @@ async function handleBookConflict(
     local as unknown as Record<string, unknown>,
     remoteSnapshot,
     "field_clash",
+    clashingFields,
   );
   await db.outbox.delete(entry.id!);
   return { entityType: "book", entityId: entry.entityId, title: local.title };
@@ -505,6 +496,12 @@ async function handleBookUpsert(
     syncStatus: "synced",
     revision,
     baseRevision: revision,
+    baseSnapshot: {
+      title: book.title,
+      author: book.author,
+      tags: book.tags,
+      isFavourite: book.isFavourite,
+    },
   });
 }
 
@@ -522,6 +519,12 @@ async function handleBookDelete(
     syncStatus: "synced",
     revision,
     baseRevision: revision,
+    baseSnapshot: {
+      title: book.title,
+      author: book.author,
+      tags: book.tags,
+      isFavourite: book.isFavourite,
+    },
   });
 }
 
@@ -561,6 +564,12 @@ async function handleBookPromote(
     syncStatus: "synced",
     revision,
     baseRevision: revision,
+    baseSnapshot: {
+      title: book.title,
+      author: book.author,
+      tags: book.tags,
+      isFavourite: book.isFavourite,
+    },
   });
 }
 
@@ -581,6 +590,7 @@ async function handleNoteUpsert(
     syncStatus: "synced",
     revision,
     baseRevision: revision,
+    baseSnapshot: { body },
   });
 }
 

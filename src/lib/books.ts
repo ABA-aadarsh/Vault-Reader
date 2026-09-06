@@ -62,6 +62,7 @@ export async function createBook(
         syncStatus: syncScope === "cloud" ? "pending" : "synced",
         updatedAt: now,
         updatedByDeviceId: "",
+        baseSnapshot: { title, author, tags, isFavourite },
       });
     },
   );
@@ -205,7 +206,12 @@ export async function restoreBook(
   await db.books
     .where("id")
     .equals(bookId)
-    .modify({ deletedAt: null, syncStatus: "pending", updatedAt: now });
+    .modify({
+      deletedAt: null,
+      syncStatus: "pending",
+      updatedAt: now,
+      baseSnapshot: { title: book.title, author: book.author, tags: book.tags, isFavourite: book.isFavourite },
+    });
 
   if (book.syncScope === "cloud") {
     await enqueue(db, {
@@ -261,7 +267,12 @@ export async function promoteToCloud(
   await db.books
     .where("id")
     .equals(bookId)
-    .modify({ syncScope: "cloud", syncStatus: "pending", updatedAt: now });
+    .modify({
+      syncScope: "cloud",
+      syncStatus: "pending",
+      updatedAt: now,
+      baseSnapshot: { title: book.title, author: book.author, tags: book.tags, isFavourite: book.isFavourite },
+    });
 
   await enqueue(db, {
     entityType: "book",

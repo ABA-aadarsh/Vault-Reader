@@ -10,6 +10,7 @@ export async function createConflict(
   localSnapshot: Record<string, unknown>,
   remoteSnapshot: Record<string, unknown>,
   reason: ConflictEntry["reason"],
+  clashingFields?: string[],
 ): Promise<ConflictEntry> {
   const bookId = entityType === "book" ? entityId : entityId;
   const conflict: Omit<ConflictEntry, "id"> = {
@@ -19,6 +20,7 @@ export async function createConflict(
     localSnapshot,
     remoteSnapshot,
     reason,
+    clashingFields,
     createdAt: Date.now(),
     status: "open",
   };
@@ -61,6 +63,12 @@ export async function resolveConflict(
       ...winner,
       syncStatus: "pending",
       updatedAt: Date.now(),
+      baseSnapshot: {
+        title: (winner.title as string) ?? "",
+        author: (winner.author as string) ?? "",
+        tags: (winner.tags as string[]) ?? [],
+        isFavourite: Boolean(winner.isFavourite),
+      },
     });
 
     await enqueue(db, {
@@ -75,6 +83,7 @@ export async function resolveConflict(
       body: winner.body as string,
       syncStatus: "pending",
       updatedAt: Date.now(),
+      baseSnapshot: { body: (winner.body as string) ?? "" },
     });
 
     await enqueue(db, {
@@ -141,6 +150,12 @@ export async function restoreConflict(
       deletedAt: null,
       syncStatus: "pending",
       updatedAt: Date.now(),
+      baseSnapshot: {
+        title: (local.title as string) ?? "",
+        author: (local.author as string) ?? "",
+        tags: (local.tags as string[]) ?? [],
+        isFavourite: Boolean(local.isFavourite),
+      },
     });
 
     await enqueue(db, {

@@ -35,5 +35,15 @@ export class BookVaultDexie extends Dexie {
     this.version(2).stores({
       books: "id, fileId, title, syncScope, syncStatus, deletedAt, updatedAt",
     });
+    this.version(3).stores({
+      books: "id, fileId, title, syncScope, syncStatus, deletedAt, updatedAt",
+      notes: "bookId, syncStatus, deletedAt, updatedAt",
+      readingState: "bookId, updatedAt",
+      files: "fileId",
+      images: "imageId",
+      outbox: "++id, entityType, entityId, createdAt, nextAttemptAt",
+      conflicts: "++id, entityType, entityId, bookId, status, createdAt",
+      syncState: "key",
+    });
   }
 }
