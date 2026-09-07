@@ -80,7 +80,7 @@ export const PDFViewer = ({
     setIsLoading(false);
   };
 
-  const onFirstPageLoadSuccess = (page: any) => {
+  const onFirstPageLoadSuccess = (page: { getViewport: (opts: { scale: number }) => { width: number; height: number } }) => {
     const viewport = page.getViewport({ scale: 1 });
     setPageHeight(viewport.height);
     setPageWidth(viewport.width);

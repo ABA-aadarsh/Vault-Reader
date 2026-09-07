@@ -42,10 +42,8 @@ export default function SignUpPage() {
     const fullName = `${data.firstName} ${data.lastName}`;
     await AuthAPI.signup(data.email, data.password, fullName);
     router.push('/dashboard');
-  } catch (err: any) {
-    if (err) {
-      alert(err.message || 'Sign up failed');
-    } 
+  } catch (err: unknown) {
+    alert(err instanceof Error ? err.message : 'Sign up failed');
   }
   };
 

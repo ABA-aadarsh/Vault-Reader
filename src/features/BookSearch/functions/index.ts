@@ -13,7 +13,12 @@ const OpenBookLibraryAPI = {
 
       const data = await res.json();
 
-      return (data.docs || []).slice(0, 20).map((book: any) => {
+      return (data.docs || []).slice(0, 20).map((book: {
+        title?: string;
+        author_name?: string[];
+        cover_i?: number;
+        first_sentence?: string[];
+      }) => {
         const title = book.title || "Untitled";
         const author = book.author_name?.[0] || "Unknown Author";
 

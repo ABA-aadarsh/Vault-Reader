@@ -4,10 +4,7 @@ import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "../../components/shared/SidebarContainer";
 import { SearchLauncherProvider } from "@/features/Search/provider/SearchLauncherProvider";
 import { SearchLauncher } from "@/features/Search/components/SearchLauncher";
-// Import CSS files for React-PDF
-//@ts-ignore
 import 'react-pdf/dist/Page/AnnotationLayer.css';
-//@ts-ignore
 import 'react-pdf/dist/Page/TextLayer.css'
 
 import {RequireAuth, useAuth} from "@/features/supabase/auth/components/RequireAuth";

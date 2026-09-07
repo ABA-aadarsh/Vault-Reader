@@ -1,14 +1,15 @@
 "use client";
 
+import React from "react";
 import { Editor } from "@/components/shared/MDXEditor/ForwardRefMDXEditor";
 import { Button } from "@/components/ui/button";
 import { DialogFooter, DialogHeader } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { BlockTypeSelect, BoldItalicUnderlineToggles, ButtonWithTooltip, CreateLink, directivesPlugin, headingsPlugin, insertDirective$, InsertImage, insertJsx$, jsxPlugin, listsPlugin, ListsToggle, markdownShortcutPlugin, quotePlugin, thematicBreakPlugin, toolbarPlugin, UndoRedo, usePublisher } from "@mdxeditor/editor";
+import { BlockTypeSelect, BoldItalicUnderlineToggles, ButtonWithTooltip, CreateLink, directivesPlugin, headingsPlugin, insertDirective$, InsertImage, insertJsx$, jsxPlugin, listsPlugin, ListsToggle, markdownShortcutPlugin, quotePlugin, thematicBreakPlugin, toolbarPlugin, UndoRedo, usePublisher, type DirectiveDescriptor, type DirectiveEditorProps, type JsxEditorProps } from "@mdxeditor/editor";
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@radix-ui/react-dialog";
 import { Label } from "@radix-ui/react-label";
 import { Separator } from "@radix-ui/react-separator";
-import { FileText, Plus, Quote, Check, X } from "lucide-react";
+import { FileText, Quote, Check, X } from "lucide-react";
 import { useState } from "react";
 import '@mdxeditor/editor/style.css'
 import "./theme.css"
@@ -28,18 +29,19 @@ function PageButton({ page }: { page: string }) {
 }
 
 // Enhanced JSX Editor wrapper component with correct prop handling
-function PageButtonEditor({ mdastNode, descriptor }: any) {
+function PageButtonEditor({ mdastNode }: JsxEditorProps) {
   console.log('PageButtonEditor mdastNode:', mdastNode); // Debug log
-  console.log('PageButtonEditor descriptor:', descriptor); // Debug log
   console.log('mdastNode.attributes:', mdastNode.attributes); // Additional debug
   console.log('mdastNode full structure:', JSON.stringify(mdastNode, null, 2)); // Full structure
   
   // Correct prop resolution - attributes is an array of {name, value} objects
   let page = '1'; // default
   
-  if (mdastNode.attributes && Array.isArray(mdastNode.attributes)) {
+  const attributes = (mdastNode.attributes ?? []) as Array<{ name: string; value?: string }>;
+  
+  if (attributes.length > 0) {
     // Find the attribute with name 'page'
-    const pageAttribute = mdastNode.attributes.find((attr: any) => attr.name === 'page');
+    const pageAttribute = attributes.find((attr) => attr.name === 'page');
     if (pageAttribute && pageAttribute.value) {
       page = pageAttribute.value;
     }
@@ -217,11 +219,11 @@ function InsertCustomQuote() {
 }
 
 // Clean minimal quote component
-function CustomQuote({ author, children }: { author: string; children: any }) {
+function CustomQuote({ author, children }: { author: string; children: React.ReactNode }) {
   return (
     <blockquote className="my-4 pl-4 border-l-2 border-border bg-accent/30 py-2 pr-3 rounded-r-md">
       <div className="text-foreground italic mb-1 text-sm leading-relaxed">
-        "{children}"
+        &quot;{children}&quot;
       </div>
       {author && author !== 'Anonymous' && (
         <footer className="text-xs text-muted-foreground">
@@ -233,17 +235,18 @@ function CustomQuote({ author, children }: { author: string; children: any }) {
 }
 
 // Custom quote directive with proper children handling
-const customQuoteDirective = {
+const customQuoteDirective: DirectiveDescriptor = {
   name: 'custom-quote',
-  testNode: (node: any) => {
+  testNode: (node) => {
     return node.name === 'custom-quote'
   },
   attributes: ['author'],
   hasChildren: true,
-  Editor: ({ mdastNode }: any) => {
-    const content = mdastNode.children?.[0]?.value || ''
+  Editor: ({ mdastNode }: DirectiveEditorProps) => {
+    const content = (mdastNode.children?.[0] as { value?: string } | undefined)?.value || ''
+    const author = (mdastNode.attributes as Record<string, unknown> | undefined)?.['author'] as string | undefined
     return (
-      <CustomQuote author={mdastNode.attributes?.author || 'Anonymous'}>
+      <CustomQuote author={author || 'Anonymous'}>
         {content}
       </CustomQuote>
     )

@@ -104,7 +104,7 @@ export default function BookViewPage({ params }: PageProps) {
         <div className="text-center space-y-4">
           <h2 className="text-2xl font-semibold">Book not found</h2>
           <p className="text-muted">
-            The book you're looking for doesn't exist.
+            The book you&apos;re looking for doesn&apos;t exist.
           </p>
         </div>
       </div>
