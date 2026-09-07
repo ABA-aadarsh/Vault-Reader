@@ -15,12 +15,14 @@ import { BookAddProvider } from "@/features/Books/provider/BookDropAddProvider";
 import { UserDbProvider } from "@/lib/dexie/db";
 import { ConflictInbox } from "@/features/sync/ConflictInbox";
 import { RecentlyDeletedSheet } from "@/features/Books/_components/RecentlyDeletedSheet";
+import { SessionExpiryBanner } from "@/features/sync/SessionExpiryBanner";
 
 function DashboardContent({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
 
   return (
     <UserDbProvider userId={user.id}>
+      <SessionExpiryBanner />
       <SearchLauncherProvider>
         <BookAddProvider>
           <SidebarProvider>

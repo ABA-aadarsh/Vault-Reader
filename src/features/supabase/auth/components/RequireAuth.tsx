@@ -1,8 +1,10 @@
 "use client"
 import { useRouter } from 'next/navigation'
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { supabase } from '../../index'
+import AuthAPI from '../auth.service'
 import type { Session, User } from '@supabase/supabase-js'
+import { engine } from '@/features/sync/SyncEngine'
 
 interface RequireAuthProps {
   children: React.ReactNode
@@ -12,6 +14,8 @@ interface RequireAuthProps {
 interface AuthContextValue {
   user: User
   session: Session
+  fromCache: boolean
+  sessionExpired: boolean
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -28,26 +32,53 @@ export const RequireAuth = ({ children, redirectTo = '/signin' }: RequireAuthPro
   const router = useRouter()
   const [auth, setAuth] = useState<AuthContextValue | null>(null)
   const [loading, setLoading] = useState(true)
+  const authRef = useRef(auth)
+  authRef.current = auth
 
   useEffect(() => {
     const init = async () => {
       const { data } = await supabase.auth.getSession()
-      if (!data.session) {
-        router.replace(redirectTo)
-      } else {
-        setAuth({ user: data.session.user, session: data.session })
+
+      if (data.session) {
+        setAuth({ user: data.session.user, session: data.session, fromCache: false, sessionExpired: false })
+        setLoading(false)
+        return
       }
+
+      if (!navigator.onLine) {
+        const cachedUser = AuthAPI.getCachedUser()
+        if (cachedUser) {
+          setAuth({ user: cachedUser, session: null as unknown as Session, fromCache: true, sessionExpired: true })
+          setLoading(false)
+          return
+        }
+      }
+
+      router.replace(redirectTo)
       setLoading(false)
     }
 
     init()
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) {
-        setAuth({ user: session.user, session })
-      } else {
-        setAuth(null)
-        router.replace(redirectTo)
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT') {
+        if (navigator.onLine) {
+          setAuth(null)
+          router.replace(redirectTo)
+        } else {
+          const current = authRef.current
+          if (current) {
+            setAuth({ ...current, fromCache: true, sessionExpired: true })
+          }
+        }
+        return
+      }
+
+      if (session && (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN')) {
+        setAuth({ user: session.user, session, fromCache: false, sessionExpired: false })
+        engine.scheduleSync()
+      } else if (session) {
+        setAuth({ user: session.user, session, fromCache: false, sessionExpired: false })
       }
     })
 

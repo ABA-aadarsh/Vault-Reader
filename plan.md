@@ -85,7 +85,7 @@ Build a **cloud-coordinated multi-master**, offline-first sync system for a **si
 Most original gaps are resolved. Remaining gaps:
 
 - No server tombstone GC (deferred from Phase 8)
-- No session expiry banner (Phase 9)
+- No session expiry banner (Phase 9) — *now implemented, see Phase 9*
 - No progress sync toggle (Phase 10)
 - No test runner (Phase 11)
 - Pre-existing lint warnings (not sync-related)
@@ -709,15 +709,36 @@ While conflict open: pause sync **only for that entity**; rest continues.
 
 ---
 
-### Phase 9 — Auth offline UX
+### Phase 9 — Auth offline UX *(completed)*
 
-9.1 Session expiry detection
-9.2 Banner component
-9.3 Allow local mutations + queue while blocked from network ops
-9.4 Re-auth → automatic cycle drain
-9.5 RequireAuth allows offline shell when cached user present
+9.1 Session expiry detection *(done — `fromCache`/`sessionExpired` flags in `AuthContext`; `RequireAuth` falls back to cached user when offline)*
+9.2 Banner component *(done — `SessionExpiryBanner` mounted in dashboard layout; try refresh then `/signin`)*
+9.3 Allow local mutations + queue while blocked from network ops *(done — verified: repos still `enqueue()` locally; engine pauses but DB stays open)*
+9.4 Re-auth → automatic cycle drain *(done — `RequireAuth` calls `engine.scheduleSync()` on `TOKEN_REFRESHED`/`SIGNED_IN`; interval also self-heals)*
+9.5 RequireAuth allows offline shell when cached user present *(done — offline `getSession()` failure falls back to cached user instead of redirect)*
 
-**Exit:** airplane mode usable after first login.
+**Decisions locked for Phase 9 (grilling session):**
+- Session caching: rely on Supabase's built-in localStorage persistence (no duplicate cache)
+- SIGNED_OUT offline: keep user in dashboard, show banner
+- SIGNED_OUT online: redirect to `/signin` (genuine sign-out)
+- Banner trigger: `sessionExpired` OR `fromCache`
+- Banner dismissable: no — persists until re-auth
+- Sign in action: try `supabase.auth.getSession()` refresh first, then `/signin`
+- Engine resume: `RequireAuth` triggers `engine.scheduleSync()` on re-auth; interval as backup
+- SyncNowButton when paused: disabled (kept as-is)
+- SyncStatusChip when paused: static "Re-auth required" (kept as-is)
+- Offline detection: `navigator.onLine` check before `getSession()`
+
+**Files created:**
+- `src/features/sync/SessionExpiryBanner.tsx` — amber banner with "Sign in" action
+
+**Files modified:**
+- `src/features/supabase/auth/components/RequireAuth.tsx` — offline fallback to cached user, `fromCache`/`sessionExpired` flags in `AuthContext`, don't drop user on offline SIGNED_OUT, trigger `engine.scheduleSync()` on re-auth
+- `src/features/supabase/auth/auth.service.ts` — expose `getCachedUser()`
+- `src/features/Books/_components/BookMenu.tsx` — promote disabled when `fromCache` (guard null session)
+- `src/app/dashboard/layout.tsx` — mount `SessionExpiryBanner`
+
+**Exit:** airplane mode usable after first login; banner prompts re-auth; local mutations queue; re-auth drains.
 
 ---
 
@@ -832,4 +853,4 @@ While conflict open: pause sync **only for that entity**; rest continues.
 
 ---
 
-*Plan approved from grilling session. Phases 0-8 are implemented; next implementation target is Phase 9 (Auth offline UX).*
+*Plan approved from grilling session. Phases 0-9 are implemented; next implementation target is Phase 10 (Progress setting & polish).*

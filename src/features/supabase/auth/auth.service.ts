@@ -12,7 +12,7 @@ function cacheUser(user: User) {
   localStorage.setItem(USER_KEY, JSON.stringify(user))
 }
 
-function getCachedUser(): User | null {
+function getLocalUser(): User | null {
   const user = localStorage.getItem(USER_KEY)
   return user ? JSON.parse(user) : null
 }
@@ -84,10 +84,10 @@ async function getCurrentUser(): Promise<User | null> {
       cacheUser(data.user)
       return data.user
     } catch (_) {
-      return getCachedUser()
+      return getLocalUser()
     }
   } else if (isLoggedInOffline()) {
-    return getCachedUser()
+    return getLocalUser()
   } else {
     throw new Error('Not authenticated (offline)')
   }
@@ -97,11 +97,16 @@ function isAuthenticated(): boolean {
   return isLoggedInOffline()
 }
 
+function getCachedUser(): User | null {
+  return getLocalUser()
+}
+
 const AuthAPI = {
   signup,
   signin,
   signout,
   getCurrentUser,
+  getCachedUser,
   isAuthenticated,
   isOnline,
 }

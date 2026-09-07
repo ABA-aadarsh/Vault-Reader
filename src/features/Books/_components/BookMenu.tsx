@@ -55,11 +55,11 @@ export function BookMenu({
 }: BookMenuProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const { session } = useAuth();
+  const { session, fromCache } = useAuth();
 
-  const sessionExpired = session.expires_at
+  const sessionExpired = fromCache || (session.expires_at
     ? session.expires_at * 1000 < Date.now()
-    : false;
+    : false);
   const isLocal = book.syncScope === "local";
   const hasDownload = book.fileSyncStatus === "present";
 
