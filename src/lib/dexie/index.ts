@@ -34,3 +34,4 @@ export { getFileBlob, removeFile, hasFile } from "../files";
 export { getImageBlob, removeImage, hasImage } from "../images";
 export { enqueue, inspectOutbox, getPendingCount, getOutboxStats } from "../outbox";
 export type { EnqueueParams, OutboxStats } from "../outbox";
+export { getProgressSyncEnabled, setProgressSyncEnabled } from "../settings";

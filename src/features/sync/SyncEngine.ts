@@ -3,6 +3,7 @@ import { pushOutbox } from "@/features/sync/push";
 import { pullFromCloud } from "@/features/sync/pull";
 import { planCoverDownloads } from "@/features/sync/filePlanner";
 import { getPendingCount } from "@/lib/outbox";
+import { getProgressSyncEnabled } from "@/lib/settings";
 import { purgeExpiredTombstones } from "@/lib/books";
 import AuthAPI from "@/features/supabase/auth/auth.service";
 import { toast } from "sonner";
@@ -172,11 +173,11 @@ class SyncEngine {
         return;
       }
 
-      const pullResult = await pullFromCloud(db, user.id);
+      const pullResult = await pullFromCloud(db, user.id, await getProgressSyncEnabled(db));
       await planCoverDownloads(db, user.id);
       await purgeExpiredTombstones(db);
 
-      const totalPulled = pullResult.books + pullResult.notes;
+      const totalPulled = pullResult.books + pullResult.notes + pullResult.readingStates;
       const durationMs = Date.now() - startedAt;
 
       const metrics: LastCycleMetrics = {
@@ -189,8 +190,8 @@ class SyncEngine {
 
       await db.syncState.put({ key: "lastCycle", value: metrics });
 
-      const hasMore = pullResult.hasMoreBooks || pullResult.hasMoreNotes;
-      const madeProgress = pullResult.books > 0 || pullResult.notes > 0;
+      const hasMore = pullResult.hasMoreBooks || pullResult.hasMoreNotes || pullResult.hasMoreReadingStates;
+      const madeProgress = pullResult.books > 0 || pullResult.notes > 0 || pullResult.readingStates > 0;
 
       this.setState({
         status: pushResult.failed > 0 ? "error" : "idle",

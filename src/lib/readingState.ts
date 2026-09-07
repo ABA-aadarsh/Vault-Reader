@@ -1,5 +1,8 @@
 import type { BookVaultDexie } from "./dexie/schema";
 import { readingStateToDomain } from "./mappers";
+import { enqueue } from "./outbox";
+import { getProgressSyncEnabled } from "./settings";
+import { engine } from "@/features/sync/SyncEngine";
 import type { ReadingState } from "./domain";
 
 // Throttle interval: skip writes if less than 2s since last update
@@ -37,12 +40,15 @@ export async function setPage(
 
   const percent = totalPages > 0 ? Math.round((page / totalPages) * 100) : 0;
   const book = await db.books.get(bookId);
+  const progressSyncEnabled = book?.syncScope === "cloud" && (await getProgressSyncEnabled(db));
+  const status: "pending" | "synced" = progressSyncEnabled ? "pending" : "synced";
 
   if (existing) {
     await db.readingState.where("bookId").equals(bookId).modify({
       page,
       percent,
       updatedAt: now,
+      syncStatus: status,
     });
   } else {
     await db.readingState.add({
@@ -53,7 +59,20 @@ export async function setPage(
       baseRevision: 0,
       updatedAt: now,
       deviceId: "",
-      syncStatus: book?.syncScope === "cloud" ? "pending" : "synced",
+      syncStatus: status,
     });
+  }
+
+  // If progress sync is enabled and the book is cloud-scoped, enqueue
+  // an outbox upsert so the engine pushes the new position.
+  if (progressSyncEnabled) {
+    await enqueue(db, {
+      entityType: "readingState",
+      entityId: bookId,
+      op: "upsert",
+      payload: { page, percent },
+      baseRevision: existing?.baseRevision ?? 0,
+    });
+    engine.scheduleSync();
   }
 }

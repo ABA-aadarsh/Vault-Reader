@@ -15,6 +15,7 @@ import { EditBookDialog } from "@/features/Books/_components/EditBookDialog";
 import { useDeleteBook } from "@/features/Books/hooks/useDeleteBook";
 import { usePromoteBook } from "@/features/Books/hooks/usePromoteBook";
 import { useRemoveDownload } from "@/features/Books/hooks/useRemoveDownload";
+import { useFailedOutbox } from "@/features/Books/hooks/useFailedOutbox";
 import { toast } from "sonner";
 
 function versionStatusFrom(syncStatus?: string): VersionStatus {
@@ -37,10 +38,14 @@ export default function Page() {
   const deleteBook = useDeleteBook();
   const promoteBook = usePromoteBook();
   const removeDownload = useRemoveDownload();
+  const { data: failedOutbox } = useFailedOutbox();
 
   const [editingBook, setEditingBook] = useState<Book | null>(null);
   const [deletingBook, setDeletingBook] = useState<Book | null>(null);
   const [promotingBook, setPromotingBook] = useState<Book | null>(null);
+
+  const failedOpFor = (docId: string) =>
+    failedOutbox?.find((op) => op.entityId === docId);
 
   // Fetch image blobs for local books and create blob URLs
   useEffect(() => {
@@ -182,6 +187,7 @@ export default function Page() {
               book={book}
               type="grid"
               versionStatus={versionStatusFrom(book.syncStatus)}
+              failedOp={failedOpFor(book.docId)}
               onEdit={setEditingBook}
               onDelete={setDeletingBook}
               onPromote={setPromotingBook}
@@ -197,6 +203,7 @@ export default function Page() {
               book={book}
               type="list"
               versionStatus={versionStatusFrom(book.syncStatus)}
+              failedOp={failedOpFor(book.docId)}
               onEdit={setEditingBook}
               onDelete={setDeletingBook}
               onPromote={setPromotingBook}

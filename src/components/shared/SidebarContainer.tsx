@@ -143,7 +143,12 @@ export function AppSidebar() {
           </Avatar>
           <div className="flex flex-col">
             <span className="text-sm font-medium">Aadarsh</span>
-            <span className="text-xs text-muted-foreground">Settings</span>
+            <span
+              className="text-xs text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+              onClick={() => router.push("/dashboard/settings")}
+            >
+              Settings
+            </span>
           </div>
         </div>
       </SidebarFooter>

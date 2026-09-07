@@ -10,6 +10,7 @@ const IMAGE_NAME = process.env.NEXT_PUBLIC_SUPABASE_BUCKET_IMAGE_NAME!;
 
 const MAX_ATTEMPTS = 20;
 const BACKOFF_CAP_MS = 60_000;
+const MAX_OUTBOX_BATCH = 10;
 
 type ErrorClass = "transient" | "auth" | "conflict" | "permanent";
 
@@ -157,6 +158,25 @@ async function rpcUpsertNote(
   return { revision: data.revision };
 }
 
+async function rpcUpsertReadingState(
+  bookId: string,
+  userId: string,
+  baseRevision: number,
+  page: number,
+  percent: number,
+): Promise<{ revision: number }> {
+  const { data, error } = await supabase.rpc("cas_upsert_reading_state", {
+    p_book_id: bookId,
+    p_user_id: userId,
+    p_base_revision: baseRevision,
+    p_page: page,
+    p_percent: percent,
+  });
+
+  if (error) throw new Error(error.message);
+  return { revision: data.revision };
+}
+
 async function softDeleteBook(
   bookId: string,
   userId: string,
@@ -228,6 +248,21 @@ async function fetchRemoteNote(
 ): Promise<Record<string, unknown> | null> {
   const { data, error } = await supabase
     .from("notes")
+    .select("*")
+    .eq("book_id", bookId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) return null;
+  return data as Record<string, unknown>;
+}
+
+async function fetchRemoteReadingState(
+  bookId: string,
+  userId: string,
+): Promise<Record<string, unknown> | null> {
+  const { data, error } = await supabase
+    .from("reading_states")
     .select("*")
     .eq("book_id", bookId)
     .eq("user_id", userId)
@@ -615,6 +650,80 @@ async function handleNoteDelete(
   });
 }
 
+async function handleReadingStateUpsert(
+  db: BookVaultDexie,
+  userId: string,
+  entry: OutboxEntry,
+): Promise<void> {
+  const state = await db.readingState.get(entry.entityId);
+  if (!state) throw new Error("Reading state not found locally");
+
+  const { revision } = await rpcUpsertReadingState(
+    entry.entityId,
+    userId,
+    entry.baseRevision,
+    entry.payload.page as number,
+    entry.payload.percent as number,
+  );
+
+  await db.readingState.update(entry.entityId, {
+    syncStatus: "synced",
+    revision,
+    baseRevision: revision,
+  });
+}
+
+async function handleReadingStateConflict(
+  db: BookVaultDexie,
+  userId: string,
+  entry: OutboxEntry,
+): Promise<void> {
+  const local = await db.readingState.get(entry.entityId);
+  if (!local) {
+    await db.outbox.delete(entry.id!);
+    return;
+  }
+
+  const remote = await fetchRemoteReadingState(entry.entityId, userId);
+  if (!remote) {
+    await db.outbox.update(entry.id!, {
+      attempts: (entry.attempts ?? 0) + 1,
+      lastError: "Failed to fetch remote reading state",
+      errorClass: "permanent",
+    });
+    return;
+  }
+
+  // Progress is a monotonic "max merge" — never regress.
+  const page = Math.max(local.page, Number(remote.page) || 0);
+  const percent = Math.max(local.percent, Number(remote.percent) || 0);
+
+  await db.readingState.update(entry.entityId, {
+    page,
+    percent,
+    revision: Number(remote.revision),
+    baseRevision: Number(remote.revision),
+  });
+
+  // If the local position is ahead of the remote, re-enqueue so the
+  // cloud learns the higher value (progress max-merge is safe to retry).
+  if (page > Number(remote.page) || percent > Number(remote.percent)) {
+    await db.readingState.update(entry.entityId, { syncStatus: "pending" });
+    await db.outbox.update(entry.id!, {
+      payload: { page, percent },
+      baseRevision: Number(remote.revision),
+      attempts: 0,
+      nextAttemptAt: Date.now(),
+      lastError: undefined,
+      errorClass: undefined,
+      op: "upsert",
+    });
+    return;
+  }
+
+  await db.outbox.delete(entry.id!);
+}
+
 // ── Dispatch ─────────────────────────────────────────────────
 
 async function pushEntry(
@@ -626,6 +735,7 @@ async function pushEntry(
     case "upsert":
       if (entry.entityType === "book") return handleBookUpsert(db, userId, entry);
       if (entry.entityType === "note") return handleNoteUpsert(db, userId, entry);
+      if (entry.entityType === "readingState") return handleReadingStateUpsert(db, userId, entry);
       break;
     case "delete":
       if (entry.entityType === "book") return handleBookDelete(db, userId, entry);
@@ -656,7 +766,8 @@ export async function pushOutbox(
   // Sort by type, then by op (upsert before delete)
   const ops = allOps
     .filter((e) => e.nextAttemptAt <= now)
-    .sort((a, b) => sortKey(a) - sortKey(b));
+    .sort((a, b) => sortKey(a) - sortKey(b))
+    .slice(0, MAX_OUTBOX_BATCH);
 
   if (ops.length === 0) return { pushed: 0, failed: 0, paused: false, newConflicts: [] };
 
@@ -695,6 +806,8 @@ export async function pushOutbox(
           } else if (entry.entityType === "note") {
             const local = await db.notes.get(entry.entityId);
             if (local) conflictInfo = await handleNoteConflict(db, userId, entry, local);
+          } else if (entry.entityType === "readingState") {
+            await handleReadingStateConflict(db, userId, entry);
           }
         } else if (entry.op === "delete") {
           conflictInfo = await handleDeleteConflict(db, userId, entry, entry.entityType as "book" | "note");

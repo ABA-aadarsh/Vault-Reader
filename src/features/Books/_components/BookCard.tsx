@@ -2,14 +2,18 @@
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import {
   Star,
   StickyNote,
   RefreshCcw,
   AlertTriangle,
   CheckCircle,
+  TriangleAlert,
 } from "lucide-react";
 import { BookMenu } from "./BookMenu";
+import type { OutboxEntry } from "@/lib/dexie/types";
+import { useRetryOutbox, useDiscardOutbox } from "@/features/Books/hooks/useFailedOutbox";
 
 export type VersionStatus = "consistent" | "behind" | "colliding";
 
@@ -34,6 +38,7 @@ type BookCardProps = {
   book: Book;
   type?: "grid" | "list";
   versionStatus?: VersionStatus;
+  failedOp?: OutboxEntry;
   onDeleted?: () => void;
   onEdit?: (book: Book) => void;
   onDelete?: (book: Book) => void;
@@ -41,10 +46,83 @@ type BookCardProps = {
   onRemoveDownload?: (book: Book) => void;
 };
 
+function FailedOpMenu({ failedOp }: { failedOp: OutboxEntry }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const { retry } = useRetryOutbox();
+  const { discard } = useDiscardOutbox();
+
+  useEffect(() => {
+    if (!open) return;
+    const onClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((o) => !o);
+        }}
+        className="text-red-600 hover:text-red-700 transition-colors"
+        title="Sync failed — tap for options"
+      >
+        <TriangleAlert className="w-4 h-4" />
+      </button>
+
+      {open && (
+        <div
+          className="absolute right-0 top-full mt-1 z-50 w-56 rounded-md border border-border bg-card shadow-md py-1"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="px-3 py-2 text-xs text-muted-foreground border-b border-border">
+            <p>Sync failed for this item.</p>
+            {failedOp.lastError && (
+              <p className="mt-1 truncate" title={failedOp.lastError}>
+                {failedOp.lastError}
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={async () => {
+              await retry(failedOp.id!);
+              setOpen(false);
+            }}
+            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left text-foreground hover:bg-muted transition-colors"
+          >
+            <RefreshCcw className="w-4 h-4" />
+            Retry sync
+          </button>
+          <button
+            type="button"
+            onClick={async () => {
+              await discard(failedOp);
+              setOpen(false);
+            }}
+            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left text-destructive hover:bg-destructive/10 transition-colors"
+          >
+            <TriangleAlert className="w-4 h-4" />
+            Discard change
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export const BookCard = ({
   book,
   type = "grid",
   versionStatus = "consistent",
+  failedOp,
   onDeleted,
   onEdit,
   onDelete,
@@ -61,6 +139,7 @@ export const BookCard = ({
     isFavourite,
     note,
     fileId,
+    fileSyncStatus,
   } = book;
 
   const handleCardClick = () => {
@@ -95,6 +174,12 @@ export const BookCard = ({
             fill
             className="object-cover"
           />
+          {fileSyncStatus === "failed" && (
+            <div
+              className="absolute top-2 right-2 w-3 h-3 rounded-full bg-red-600 border-2 border-white"
+              title="PDF download failed"
+            />
+          )}
         </div>
 
         <div className="flex items-center justify-between gap-2 text-sm">
@@ -121,6 +206,7 @@ export const BookCard = ({
           <div className="flex items-center gap-1">
             {note && <StickyNote className="text-muted w-4 h-4" />}
             {renderVersionIcon()}
+            {failedOp && <FailedOpMenu failedOp={failedOp} />}
             <BookMenu
               book={book}
               onEdit={onEdit}
@@ -148,6 +234,12 @@ export const BookCard = ({
             fill
             className="object-cover"
           />
+          {fileSyncStatus === "failed" && (
+            <div
+              className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-red-600 border border-white"
+              title="PDF download failed"
+            />
+          )}
         </div>
 
         <div className="flex flex-col gap-0.5 min-w-0">
@@ -174,6 +266,7 @@ export const BookCard = ({
       <div className="flex items-center gap-2">
         {note && <StickyNote className="text-muted w-4 h-4" />}
         {renderVersionIcon()}
+        {failedOp && <FailedOpMenu failedOp={failedOp} />}
         <BookMenu
           book={book}
           onEdit={onEdit}

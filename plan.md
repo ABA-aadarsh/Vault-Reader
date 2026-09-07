@@ -742,16 +742,32 @@ While conflict open: pause sync **only for that entity**; rest continues.
 
 ---
 
-### Phase 10 — Progress setting & polish
+### Phase 10 — Progress setting & polish *(completed)*
 
-10.1 Settings toggle progress sync (default off)
-10.2 Auto-download policy setting
-10.3 Failed op Retry/Discard UI on book
-10.4 Empty/error states for download failures
-10.5 Performance: pull pagination, outbox batch limits
-10.6 Max PDF size / storage quota messaging (deferred from follow-ups; still open)
+10.1 Settings toggle progress sync (default off) *(done)*
+10.2 Auto-download policy setting *(dropped — download-on-open stays)*
+10.3 Failed op Retry/Discard UI on book *(done)*
+10.4 Empty/error states for download failures *(done)*
+10.5 Performance: pull pagination, outbox batch limits *(done)*
+10.6 Max PDF size / storage quota messaging (deferred from follow-ups; still open) *(done — 50MB soft warning)*
 
 **Exit:** settings complete; no stuck failed ops without UI.
+
+**Decisions locked for Phase 10 (from grilling session):**
+- Settings page keeps the Appearance tab; Profile/Notifications/Security are replaced with Sync (status + progress toggle) and Account (email + sign out).
+- Progress sync defaults to OFF; turning it ON is forward-only — no retroactive enqueue of existing local positions.
+- Progress setting is stored in the existing `syncState` table under key `"progressSyncEnabled"` (no schema change).
+- Progress merge is monotonic max (page/percent) — never regresses, never creates a conflict inbox entry.
+- Failed-op Retry/Discard surfaces only for books; on discard, orphaned storage files are deferred to server-side GC and entity `syncStatus` resets to `synced`.
+- Download failures show a generic message + Retry on the viewer; a red dot marks the BookCard when `fileSyncStatus === "failed"`.
+- Outbox batch is capped at `MAX_OUTBOX_BATCH = 10` per cycle (after coalescing); pull pagination stays at 100 rows/page.
+- Files over 50 MB trigger a `window.confirm` warning on upload only — no hard cap, no aggregate quota display.
+
+**Files created:**
+- `src/lib/settings.ts` — `getProgressSyncEnabled` / `setProgressSyncEnabled`
+- `src/features/Books/hooks/useFailedOutbox.ts` — failed-op query + retry/discard mutations
+
+**Files changed:** push/pull RPCs + handlers for reading states, reader page progress wiring via `setPage`, settings page rebuild, BookCard failed-op menu + red dot, 50MB warnings, sidebar Settings link.
 
 ---
 

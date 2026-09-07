@@ -14,8 +14,10 @@ export interface PullCursor {
 export interface PullResult {
   books: number;
   notes: number;
+  readingStates: number;
   hasMoreBooks: boolean;
   hasMoreNotes: boolean;
+  hasMoreReadingStates: boolean;
 }
 
 function isCursor(value: unknown): value is PullCursor {
@@ -26,7 +28,7 @@ function isCursor(value: unknown): value is PullCursor {
 
 async function getCursor(
   db: BookVaultDexie,
-  key: "booksPullCursor" | "notesPullCursor",
+  key: "booksPullCursor" | "notesPullCursor" | "readingStatesPullCursor",
 ): Promise<PullCursor | null> {
   const entry = await db.syncState.get(key);
   return isCursor(entry?.value) ? entry.value : null;
@@ -34,7 +36,7 @@ async function getCursor(
 
 async function setCursor(
   db: BookVaultDexie,
-  key: "booksPullCursor" | "notesPullCursor",
+  key: "booksPullCursor" | "notesPullCursor" | "readingStatesPullCursor",
   cursor: PullCursor,
 ): Promise<void> {
   await db.syncState.put({ key, value: cursor });
@@ -51,7 +53,7 @@ function cloudTime(value: string | null): number {
 }
 
 function isPending(
-  entityType: "book" | "note",
+  entityType: "book" | "note" | "readingState",
   entityId: string,
   pendingIds: Set<string>,
 ): boolean {
@@ -292,13 +294,104 @@ export async function pullNotes(db: BookVaultDexie, userId: string): Promise<{ c
   return { count: processed, hasMore: rows.length === PAGE_SIZE || processed < rows.length };
 }
 
-export async function pullFromCloud(db: BookVaultDexie, userId: string): Promise<PullResult> {
+async function applyReadingState(
+  db: BookVaultDexie,
+  cloudState: Record<string, unknown>,
+): Promise<void> {
+  const bookId = cloudState.book_id as string;
+  const existing = await db.readingState.get(bookId);
+  const cloudPage = Number(cloudState.page) || 0;
+  const cloudPercent = Number(cloudState.percent) || 0;
+
+  // max merge — never regress local progress
+  const page = existing ? Math.max(existing.page, cloudPage) : cloudPage;
+  const percent = existing ? Math.max(existing.percent, cloudPercent) : cloudPercent;
+
+  const values = {
+    bookId,
+    page,
+    percent,
+    revision: Number(cloudState.revision),
+    baseRevision: Number(cloudState.revision),
+    syncStatus: "synced" as const,
+    updatedAt: cloudTime(cloudState.updated_at as string | null),
+    deviceId: "",
+  };
+
+  if (existing) await db.readingState.update(bookId, values);
+  else await db.readingState.add(values);
+}
+
+export async function pullReadingStates(
+  db: BookVaultDexie,
+  userId: string,
+): Promise<{ count: number; hasMore: boolean }> {
+  const cursor = await getCursor(db, "readingStatesPullCursor");
+  let query = supabase
+    .from("reading_states")
+    .select("*")
+    .eq("user_id", userId)
+    .order("updated_at", { ascending: true })
+    .order("book_id", { ascending: true })
+    .limit(PAGE_SIZE);
+
+  const filter = cursor
+    ? `updated_at.gt.${cursor.updatedAt},and(updated_at.eq.${cursor.updatedAt},book_id.gt.${cursor.id})`
+    : null;
+  if (filter) query = query.or(filter);
+
+  const { data, error } = await query;
+  if (error) throw new Error(`Failed to pull reading states: ${error.message}`);
+
+  const rows = (data ?? []) as Array<Record<string, unknown>>;
+  const pendingIds = await pendingEntityIds(db);
+  const conflictedIds = await conflictedEntityIds(db);
+  let processed = 0;
+  let lastCursor = cursor;
+
+  for (const row of rows) {
+    const id = row.book_id as string;
+if (isPending("readingState", id, pendingIds)) break;
+    if (isPending("readingState", id, conflictedIds)) {
+      lastCursor = { updatedAt: row.updated_at as string, id };
+      continue;
+    }
+    if (!await db.books.get(id)) {
+      lastCursor = { updatedAt: row.updated_at as string, id };
+      continue;
+    }
+    const existing = await db.readingState.get(id);
+    if (!existing || Number(row.revision) > existing.baseRevision) await applyReadingState(db, row);
+    lastCursor = { updatedAt: row.updated_at as string, id };
+    processed++;
+  }
+
+  if (lastCursor && processed > 0) await setCursor(db, "readingStatesPullCursor", lastCursor);
+  return { count: processed, hasMore: rows.length === PAGE_SIZE || processed < rows.length };
+}
+
+export async function pullFromCloud(
+  db: BookVaultDexie,
+  userId: string,
+  includeReadingStates = false,
+): Promise<PullResult> {
   const books = await pullBooks(db, userId);
   const notes = await pullNotes(db, userId);
+
+  let readingStates = 0;
+  let hasMoreReadingStates = false;
+  if (includeReadingStates) {
+    const result = await pullReadingStates(db, userId);
+    readingStates = result.count;
+    hasMoreReadingStates = result.hasMore;
+  }
+
   return {
     books: books.count,
     notes: notes.count,
+    readingStates,
     hasMoreBooks: books.hasMore,
     hasMoreNotes: notes.hasMore,
+    hasMoreReadingStates,
   };
 }

@@ -1,22 +1,21 @@
 "use client";
-import React, { useState } from 'react';
-import { User, Mail, Edit3, Save, X, LogOut, Camera, Bell, Shield, Palette, Check } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Switch } from '@/components/ui/switch';
-import { Separator } from '@/components/ui/separator';
+import React, { useState, useEffect } from "react";
+import { LogOut, Palette, Check, RefreshCcw, Wifi, WifiOff } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
+import { Separator } from "@/components/ui/separator";
+import { useAuth } from "@/features/supabase/auth/components/RequireAuth";
+import { useDb } from "@/lib/dexie/db";
+import AuthAPI from "@/features/supabase/auth/auth.service";
+import { useRouter } from "next/navigation";
+import {
+  getProgressSyncEnabled,
+  setProgressSyncEnabled,
+} from "@/lib/settings";
+import { useSyncStatus } from "@/features/sync/useSyncStatus";
 
-// Define the UserInfo type for better type safety
-interface UserInfo {
-  firstName: string;
-  lastName: string;
-  email: string;
-  profileImage: string | null;
-}
-
-// Define the Tab type for the navigation tabs
 interface Tab {
   id: string;
   label: string;
@@ -24,64 +23,39 @@ interface Tab {
 }
 
 const SettingsPage: React.FC = () => {
-  const [isEditing, setIsEditing] = useState(false);
-  const [userInfo, setUserInfo] = useState<UserInfo>({
-    firstName: 'John',
-    lastName: 'Doe',
-    email: 'john.doe@example.com',
-    profileImage: null,
-  });
-  
-  const [tempUserInfo, setTempUserInfo] = useState<UserInfo>(userInfo);
-  const [activeTab, setActiveTab] = useState<string>('profile');
-  const [notifications, setNotifications] = useState({
-    email: true,
-    push: false,
-  });
-  const [selectedTheme, setSelectedTheme] = useState('system');
+  const [activeTab, setActiveTab] = useState<string>("sync");
+  const [selectedTheme, setSelectedTheme] = useState("system");
+  const [progressSync, setProgressSync] = useState(false);
+  const [loadingProgressSync, setLoadingProgressSync] = useState(true);
+  const { user } = useAuth();
+  const db = useDb();
+  const router = useRouter();
+  const { status, pendingCount, conflictCount } = useSyncStatus();
 
-  const handleEdit = () => {
-    setIsEditing(true);
-    setTempUserInfo(userInfo);
+  // Load progress sync setting from DB
+  useEffect(() => {
+    (async () => {
+      const val = await getProgressSyncEnabled(db);
+      setProgressSync(val);
+      setLoadingProgressSync(false);
+    })();
+  }, [db]);
+
+  const handleProgressSyncToggle = async (enabled: boolean) => {
+    setProgressSync(enabled);
+    await setProgressSyncEnabled(db, enabled);
   };
 
-  const handleSave = () => {
-    setUserInfo(tempUserInfo);
-    setIsEditing(false);
-  };
-
-  const handleCancel = () => {
-    setTempUserInfo(userInfo);
-    setIsEditing(false);
-  };
-
-  const handleInputChange = (field: keyof UserInfo, value: string) => {
-    setTempUserInfo(prev => ({ ...prev, [field]: value }));
-  };
-
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setTempUserInfo(prev => ({ ...prev, profileImage: e.target?.result as string }));
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleLogout = () => {
-    alert('Logging out...');
+  const handleLogout = async () => {
+    await AuthAPI.signout();
+    router.replace("/signin");
   };
 
   const tabs: Tab[] = [
-    { id: 'profile', label: 'Profile', icon: User },
-    { id: 'notifications', label: 'Notifications', icon: Bell },
-    { id: 'security', label: 'Security', icon: Shield },
-    { id: 'appearance', label: 'Appearance', icon: Palette },
+    { id: "sync", label: "Sync", icon: RefreshCcw },
+    { id: "account", label: "Account", icon: LogOut },
+    { id: "appearance", label: "Appearance", icon: Palette },
   ];
-
-  const currentInfo = isEditing ? tempUserInfo : userInfo;
 
   return (
     <div className="min-h-screen bg-background">
@@ -91,9 +65,9 @@ const SettingsPage: React.FC = () => {
           <div className="flex items-center justify-between">
             <div className="space-y-1">
               <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
-              <p className="text-muted-foreground">Manage your account preferences and settings</p>
+              <p className="text-muted-foreground">Manage your sync and account preferences</p>
             </div>
-            <Button variant="destructive" onClick={handleLogout} size="sm" className='cursor-pointer rounded-sm'>
+            <Button variant="destructive" onClick={handleLogout} size="sm" className="cursor-pointer rounded-sm">
               <LogOut className="w-4 h-4 mr-2" />
               Sign Out
             </Button>
@@ -115,8 +89,8 @@ const SettingsPage: React.FC = () => {
                     onClick={() => setActiveTab(tab.id)}
                     variant={isActive ? "secondary" : "ghost"}
                     className={`w-full justify-start h-11 px-3 cursor-pointer ${
-                      isActive 
-                        ? "bg-secondary text-secondary-foreground font-medium" 
+                      isActive
+                        ? "bg-secondary text-secondary-foreground font-medium"
                         : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
                     }`}
                   >
@@ -130,227 +104,117 @@ const SettingsPage: React.FC = () => {
 
           {/* Main Content */}
           <div className="flex-1 space-y-6">
-            
-            {activeTab === 'profile' && (
+
+            {/* ── Sync Tab ────────────────────────────────────── */}
+            {activeTab === "sync" && (
               <div className="space-y-6">
+                {/* Sync status */}
+                <Card className="border-accent">
+                  <CardHeader className="pb-3">
+                    <CardTitle>Sync Status</CardTitle>
+                    <CardDescription>Current sync engine state</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2">
+                        {status === "syncing" ? (
+                          <RefreshCcw className="w-4 h-4 animate-spin text-blue-600" />
+                        ) : status === "error" ? (
+                          <WifiOff className="w-4 h-4 text-red-600" />
+                        ) : status === "paused" ? (
+                          <WifiOff className="w-4 h-4 text-amber-600" />
+                        ) : (
+                          <Wifi className="w-4 h-4 text-green-600" />
+                        )}
+                        <span className="text-sm font-medium">
+                          {status === "syncing"
+                            ? "Syncing"
+                            : status === "error"
+                              ? "Error"
+                              : status === "paused"
+                                ? "Paused"
+                                : "Up to date"}
+                        </span>
+                      </div>
+                      {pendingCount > 0 && (
+                        <span className="text-xs bg-muted px-2 py-0.5 rounded">
+                          {pendingCount} pending
+                        </span>
+                      )}
+                      {conflictCount > 0 && (
+                        <span className="text-xs bg-destructive/10 text-destructive px-2 py-0.5 rounded">
+                          {conflictCount} conflict{conflictCount > 1 ? "s" : ""}
+                        </span>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Progress sync */}
                 <Card className="border-accent">
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
                       <div>
-                        <CardTitle>Profile Information</CardTitle>
+                        <CardTitle>Sync Reading Progress</CardTitle>
                         <CardDescription>
-                          Update your personal details and profile picture
+                          Sync your reading position across devices. When off, progress stays on this device.
                         </CardDescription>
                       </div>
-                      {!isEditing ? (
-                        <Button onClick={handleEdit} size="sm">
-                          <Edit3 className="w-4 h-4 mr-2" />
-                          Edit
-                        </Button>
-                      ) : (
-                        <div className="flex gap-2">
-                          <Button onClick={handleCancel} variant="outline" size="sm">
-                            <X className="w-4 h-4 mr-2" />
-                            Cancel
-                          </Button>
-                          <Button onClick={handleSave} size="sm">
-                            <Save className="w-4 h-4 mr-2" />
-                            Save
-                          </Button>
-                        </div>
-                      )}
+                      <Switch
+                        checked={progressSync}
+                        onCheckedChange={handleProgressSyncToggle}
+                        disabled={loadingProgressSync}
+                      />
                     </div>
                   </CardHeader>
-                  <CardContent className="space-y-6">
-                    {/* Profile Picture */}
-                    <div className="space-y-3">
-                      <Label>Profile Picture</Label>
-                      <div className="flex items-center gap-4">
-                        <div className="relative">
-                          <div className="w-16 h-16 rounded-full bg-muted border border-card-foreground/10 flex items-center justify-center overflow-hidden">
-                            {currentInfo.profileImage ? (
-                              <img
-                                src={currentInfo.profileImage}
-                                alt="Profile"
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              <User className="w-8 h-8 text-muted-foreground" />
-                            )}
-                          </div>
-                          {isEditing && (
-                            <>
-                              <label
-                                htmlFor="profile-upload"
-                                className="absolute -bottom-1 -right-1 w-6 h-6 bg-primary text-primary-foreground rounded-full flex items-center justify-center cursor-pointer hover:bg-primary/90 transition-colors"
-                              >
-                                <Camera className="w-3 h-3" />
-                              </label>
-                              <input
-                                id="profile-upload"
-                                type="file"
-                                accept="image/*"
-                                onChange={handleImageUpload}
-                                className="hidden"
-                              />
-                            </>
-                          )}
-                        </div>
-                        {isEditing && (
-                          <div className="text-sm text-muted-foreground">
-                            <p>JPG, PNG or WebP. Max 2MB.</p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <Separator />
-
-                    {/* Form Fields */}
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="firstName">First Name</Label>
-                          {isEditing ? (
-                            <Input
-                              id="firstName"
-                              value={tempUserInfo.firstName}
-                              onChange={(e) => handleInputChange('firstName', e.target.value)}
-                              placeholder="Enter your first name"
-                            />
-                          ) : (
-                            <div className="px-3 py-2 bg-muted/50 border border-card-foreground/10 rounded-md text-sm">
-                              {currentInfo.firstName}
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="lastName">Last Name</Label>
-                          {isEditing ? (
-                            <Input
-                              id="lastName"
-                              value={tempUserInfo.lastName}
-                              onChange={(e) => handleInputChange('lastName', e.target.value)}
-                              placeholder="Enter your last name"
-                            />
-                          ) : (
-                            <div className="px-3 py-2 bg-muted/50 border border-card-foreground/10 rounded-md text-sm">
-                              {currentInfo.lastName}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="email">Email Address</Label>
-                        {isEditing ? (
-                          <Input
-                            id="email"
-                            type="email"
-                            value={tempUserInfo.email}
-                            onChange={(e) => handleInputChange('email', e.target.value)}
-                            placeholder="Enter your email address"
-                          />
-                        ) : (
-                          <div className="flex items-center gap-2 px-3 py-2 bg-muted/50 border border-card-foreground/10 rounded-md text-sm">
-                            <Mail className="w-4 h-4 text-muted-foreground" />
-                            {currentInfo.email}
-                          </div>
-                        )}
-                      </div>
-                    </div>
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground">
+                      {progressSync
+                        ? "Reading progress is syncing. Your page position will be shared across devices."
+                        : "Reading progress is local-only. Each device tracks its own position."}
+                    </p>
                   </CardContent>
                 </Card>
               </div>
             )}
 
-            {activeTab === 'notifications' && (
+            {/* ── Account Tab ─────────────────────────────────── */}
+            {activeTab === "account" && (
               <Card className="border-accent">
                 <CardHeader>
-                  <CardTitle>Notifications</CardTitle>
-                  <CardDescription>
-                    Configure how you receive notifications
-                  </CardDescription>
+                  <CardTitle>Account</CardTitle>
+                  <CardDescription>Manage your account settings</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label>Email Notifications</Label>
-                      <p className="text-sm text-muted-foreground">
-                        Receive notifications via email
-                      </p>
+                  <div className="space-y-3">
+                    <Label>Email</Label>
+                    <div className="px-3 py-2 bg-muted/50 border border-card-foreground/10 rounded-md text-sm">
+                      {user.email ?? "Not available"}
                     </div>
-                    <Switch
-                      checked={notifications.email}
-                      onCheckedChange={(checked) =>
-                        setNotifications(prev => ({ ...prev, email: checked }))
-                      }
-                    />
                   </div>
 
                   <Separator />
 
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label>Push Notifications</Label>
-                      <p className="text-sm text-muted-foreground">
-                        Receive push notifications in your browser
-                      </p>
-                    </div>
-                    <Switch
-                      checked={notifications.push}
-                      onCheckedChange={(checked) =>
-                        setNotifications(prev => ({ ...prev, push: checked }))
-                      }
-                    />
+                  <div className="space-y-3">
+                    <Label>Danger zone</Label>
+                    <Button
+                      variant="destructive"
+                      onClick={handleLogout}
+                      className="cursor-pointer"
+                    >
+                      <LogOut className="w-4 h-4 mr-2" />
+                      Sign out
+                    </Button>
+                    <p className="text-xs text-muted-foreground">
+                      This will sign you out of your account. Your local data is preserved.
+                    </p>
                   </div>
                 </CardContent>
               </Card>
             )}
 
-            {activeTab === 'security' && (
-              <div className="space-y-6">
-                <Card className="border-accent">
-                  <CardHeader>
-                    <CardTitle>Security</CardTitle>
-                    <CardDescription>
-                      Manage your account security settings
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <Button variant="outline" className="w-full justify-start h-auto py-4">
-                      <div className="text-left">
-                        <div className="font-medium">Change Password</div>
-                        <div className="text-sm text-muted-foreground">
-                          Update your account password
-                        </div>
-                      </div>
-                    </Button>
-
-                    <Button variant="outline" className="w-full justify-start h-auto py-4">
-                      <div className="text-left">
-                        <div className="font-medium">Two-Factor Authentication</div>
-                        <div className="text-sm text-muted-foreground">
-                          Add an extra layer of security to your account
-                        </div>
-                      </div>
-                    </Button>
-
-                    <Button variant="outline" className="w-full justify-start h-auto py-4">
-                      <div className="text-left">
-                        <div className="font-medium">Active Sessions</div>
-                        <div className="text-sm text-muted-foreground">
-                          View and manage your active sessions
-                        </div>
-                      </div>
-                    </Button>
-                  </CardContent>
-                </Card>
-              </div>
-            )}
-
-            {activeTab === 'appearance' && (
+            {/* ── Appearance Tab ──────────────────────────────── */}
+            {activeTab === "appearance" && (
               <Card className="border-accent">
                 <CardHeader>
                   <CardTitle>Appearance</CardTitle>
@@ -363,9 +227,9 @@ const SettingsPage: React.FC = () => {
                     <Label>Theme</Label>
                     <div className="grid grid-cols-3 gap-3">
                       {[
-                        { id: 'light', label: 'Light', desc: 'Light mode' },
-                        { id: 'system', label: 'System', desc: 'System preference' },
-                        { id: 'dark', label: 'Dark', desc: 'Dark mode' }
+                        { id: "light", label: "Light", desc: "Light mode" },
+                        { id: "system", label: "System", desc: "System preference" },
+                        { id: "dark", label: "Dark", desc: "Dark mode" },
                       ].map((theme) => (
                         <Button
                           key={theme.id}

@@ -28,12 +28,14 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 interface PDFViewerProps {
   fileUrl: string | null;
   className?: string;
+  onPageChange?: (currentPage: number, totalPages: number) => void;
 }
 
 export const PDFViewer = ({
   fileUrl,
   // fileUrl = "https://blvebkbikgpulnererdb.supabase.co/storage/v1/object/public/books/9bb4d83a-d9c1-4ecd-873c-c16e7b4a7d68.pdf",
-  className = ""
+  className = "",
+  onPageChange
 }: PDFViewerProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [numPages, setNumPages] = useState<number>(0);
@@ -206,6 +208,12 @@ export const PDFViewer = ({
       return () => el.removeEventListener('scroll', handleScroll);
     }
   }, [scaledPageHeight, numPages, currentPage]);
+
+  // Report page changes upwards (used to persist reading progress)
+  useEffect(() => {
+    if (!onPageChange || numPages === 0) return;
+    onPageChange(currentPage, numPages);
+  }, [currentPage, numPages, onPageChange]);
 
   // Reduced frequency of virtualizer refresh to prevent flickering
   useEffect(() => {

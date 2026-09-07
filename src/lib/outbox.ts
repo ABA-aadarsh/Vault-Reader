@@ -142,6 +142,44 @@ export async function getPendingCount(db: BookVaultDexie): Promise<number> {
   return db.outbox.count();
 }
 
+/**
+ * Returns outbox entries that have failed permanently.
+ */
+export async function getFailedOutbox(db: BookVaultDexie): Promise<OutboxEntry[]> {
+  const entries = await db.outbox.toArray();
+  return entries.filter((e) => e.errorClass === "permanent");
+}
+
+/**
+ * Reset a failed outbox entry so the next cycle retries it.
+ */
+export async function retryOutboxEntry(
+  db: BookVaultDexie,
+  entryId: number,
+): Promise<void> {
+  await db.outbox.update(entryId, {
+    attempts: 0,
+    nextAttemptAt: Date.now(),
+    lastError: undefined,
+    errorClass: undefined,
+  });
+}
+
+/**
+ * Remove a failed outbox entry permanently. The user is explicitly
+ * choosing to drop this operation. Returns the removed entry so
+ * callers can clean up related state (e.g. reset syncStatus).
+ */
+export async function discardOutboxEntry(
+  db: BookVaultDexie,
+  entryId: number,
+): Promise<OutboxEntry | undefined> {
+  const entry = await db.outbox.get(entryId);
+  if (!entry) return undefined;
+  await db.outbox.delete(entryId);
+  return entry;
+}
+
 export interface OutboxStats {
   total: number;
   byEntity: Record<string, number>;

@@ -90,6 +90,14 @@ const FileDropDialog = ({
   useEffect(() => {
     if (droppedFiles.length > 0) {
       const mainFile = droppedFiles[0];
+      // Warn for large files (>50 MB) on drag-and-drop too
+      if (mainFile.size > 50 * 1024 * 1024) {
+        const mb = (mainFile.size / (1024 * 1024)).toFixed(1);
+        const ok = window.confirm(
+          `This file is large (${mb} MB). Upload anyway?`,
+        );
+        if (!ok) return;
+      }
       setFormData((prev) => ({
         ...prev,
         file: mainFile,
@@ -108,6 +116,14 @@ const FileDropDialog = ({
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      // Warn for large files (>50 MB) — ask for confirmation
+      if (file.size > 50 * 1024 * 1024) {
+        const mb = (file.size / (1024 * 1024)).toFixed(1);
+        const ok = window.confirm(
+          `This file is large (${mb} MB). Upload anyway?`,
+        );
+        if (!ok) return;
+      }
       setFormData((prev) => ({
         ...prev,
         file: file,
