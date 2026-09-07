@@ -20,10 +20,10 @@ const PDFViewer = dynamic(
 );
 
 interface PDFViewerWrapperProps {
-  fileUrl?: string;
+  fileUrl?: string | null;
   className?: string;
 }
 
 export default function PDFViewerWrapper({ fileUrl, className }: PDFViewerWrapperProps) {
-  return <PDFViewer fileUrl={fileUrl} className={className} />;
+  return <PDFViewer fileUrl={fileUrl ?? null} className={className} />;
 }

@@ -348,7 +348,7 @@ export const PDFViewer = ({
             </Button>
 
             <a
-              href={fileUrl}
+              href={fileUrl ?? undefined}
               download
               className={buttonVariants({variant: "ghost"})}
               title="Download PDF"

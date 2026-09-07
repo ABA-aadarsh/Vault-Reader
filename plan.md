@@ -85,9 +85,9 @@ Build a **cloud-coordinated multi-master**, offline-first sync system for a **si
 Most original gaps are resolved. Remaining gaps:
 
 - No server tombstone GC (deferred from Phase 8)
-- No session expiry banner (Phase 9) — *now implemented, see Phase 9*
-- No progress sync toggle (Phase 10)
-- No test runner (Phase 11)
+- Session expiry banner — implemented in Phase 9
+- Progress sync toggle — implemented in Phase 10
+- Test runner — implemented in Phase 11
 - Pre-existing lint warnings (not sync-related)
 
 ---
@@ -771,15 +771,15 @@ While conflict open: pause sync **only for that entity**; rest continues.
 
 ---
 
-### Phase 11 — Hardening & tests
+### Phase 11 — Hardening & tests *(completed)*
 
-11.1 Add test runner (Vitest)
-11.2 Tests: coalesce, CAS conflict detect, tombstone apply, field merge, progress max, per-user DB isolation
-11.3 Manual multi-device checklist (script in plan or `docs/sync-qa.md`)
-11.4 Remove dead Appwrite / old sync code
-11.5 Turn on TypeScript build errors (stop `ignoreBuildErrors` for sync modules at least)
+11.1 Add test runner (Vitest) *(done — vitest v3, central `tests/` dir, fake-indexeddb)*
+11.2 Tests: coalesce, CAS conflict detect, tombstone apply, field merge, progress max, per-user DB isolation *(done — 47 tests across 5 files, all passing)*
+11.3 Manual multi-device checklist *(done — `docs/sync-qa.md` refreshed with C1-C9, S1-S3, P1-P3, D1-D3 + existing T3-T17)*
+11.4 Remove dead Appwrite / old sync code *(done — `appwrite` uninstalled; `PDFAndNoteViewer/` deleted; all legacy sync files already removed)*
+11.5 Turn on TypeScript build errors *(done — `ignoreBuildErrors` already `false` in `next.config.ts`; 3 TS errors fixed: PDFAndNoteViewer deleted, ClientSafePDFWrapper + PDFViewer `null`/`undefined` alignment)*
 
-**Exit:** confidence for daily use.
+**Exit:** `npm run test` green · `tsc --noEmit` = 0 · `next.config.ts` has `ignoreBuildErrors: false` · `docs/sync-qa.md` up to date.
 
 ---
 
@@ -869,4 +869,4 @@ While conflict open: pause sync **only for that entity**; rest continues.
 
 ---
 
-*Plan approved from grilling session. Phases 0-9 are implemented; next implementation target is Phase 10 (Progress setting & polish).*
+*Plan approved from grilling session. Phases 0-11 are implemented. Remaining: server tombstone GC (Phase 8 deferred) and Phase 12 follow-on roadmap.*
