@@ -10,6 +10,7 @@ export interface EnqueueParams {
   op: OutboxOp;
   payload: Record<string, unknown>;
   baseRevision: number;
+  allowUpsertAfterDelete?: boolean;
 }
 
 /**
@@ -19,7 +20,8 @@ export interface EnqueueParams {
  * Coalesce rules for same (entityType, entityId):
  *   upsert + upsert → shallow merge payload, earliest baseRevision
  *   upsert + delete  → delete wins (remove the upsert)
- *   delete + upsert  → throw error (block undelete; use restoreBook instead)
+ *   delete + upsert  → throw error (block undelete; use restoreBook instead,
+ *                     which sets allowUpsertAfterDelete to replace the delete)
  *   promote          → always insert (no coalesce)
  */
 export async function enqueue(
@@ -82,10 +84,24 @@ export async function enqueue(
     }
 
     if (op === "upsert" && existing.op === "delete") {
-      // Block undelete via outbox — must use restoreBook() flow
-      throw new Error(
-        `Cannot enqueue upsert for ${entityId}: a pending delete exists. Use restoreBook() instead.`,
-      );
+      if (!params.allowUpsertAfterDelete) {
+        // Block undelete via outbox — must use restoreBook() flow
+        throw new Error(
+          `Cannot enqueue upsert for ${entityId}: a pending delete exists. Use restoreBook() instead.`,
+        );
+      }
+      // Restore flow: replace the pending delete with the upsert
+      await db.outbox.update(existing.id!, {
+        op: "upsert",
+        payload,
+        baseRevision,
+        createdAt: Date.now(),
+        attempts: 0,
+        nextAttemptAt: Date.now(),
+        lastError: undefined,
+        errorClass: undefined,
+      });
+      return;
     }
 
     if (op === "upsert" && existing.op === "upsert") {

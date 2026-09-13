@@ -212,6 +212,44 @@ describe("pull — tombstone apply", () => {
     expect(book).toBeDefined();
     expect(book!.deletedAt).not.toBeNull();
   });
+
+  it("tombstone on existing book resets blob statuses and removes blobs", async () => {
+    await db.books.add({
+      id: "book-1",
+      title: "Deleted",
+      author: "Author",
+      tags: [],
+      isFavourite: false,
+      fileId: "file-1",
+      imageId: "img-1",
+      syncScope: "cloud",
+      revision: 1,
+      baseRevision: 1,
+      deletedAt: null,
+      fileSyncStatus: "present",
+      coverSyncStatus: "present",
+      syncStatus: "synced",
+      updatedAt: Date.now(),
+      updatedByDeviceId: "",
+    });
+    await db.files.add({ fileId: "file-1", file: new Blob(["pdf"]) });
+    await db.images.add({ imageId: "img-1", image: new Blob(["img"]) });
+
+    const { supabase } = await import("@/features/supabase/index");
+    const row = cloudRow({
+      deleted_at: "2025-06-01T00:00:00Z",
+      revision: 2,
+    });
+    (supabase.from as ReturnType<typeof vi.fn>).mockReturnValue(mockSupabaseQuery([row]));
+
+    await pullBooks(db, "user-1");
+
+    const book = await db.books.get("book-1");
+    expect(book!.fileSyncStatus).toBe("not_downloaded");
+    expect(book!.coverSyncStatus).toBe("not_downloaded");
+    expect(await db.files.toArray()).toHaveLength(0);
+    expect(await db.images.toArray()).toHaveLength(0);
+  });
 });
 
 describe("pull — note apply", () => {

@@ -32,6 +32,8 @@ export default function BookViewPage({ params }: PageProps) {
   const { user } = useAuth();
   const router = useRouter();
   const blobUrlRef = useRef<string | null>(null);
+  const selectedBookRef = useRef<Book | null>(null);
+  selectedBookRef.current = selectedBook;
 
   // Find the book in the list
   useEffect(() => {
@@ -44,20 +46,26 @@ export default function BookViewPage({ params }: PageProps) {
   // Fetch the actual file blob and create blob URL
   const fetchFileBlob = useCallback(
     async (forRetry = false) => {
-      if (!selectedBook) return;
+      const book = selectedBookRef.current;
+      if (!book) return;
 
       try {
         setIsFetchingFile(true);
         if (forRetry) setLoadFailed(false);
 
-        let blob = await getFileBlob(db, selectedBook.fileId);
+        let blob = await getFileBlob(db, book.fileId);
 
-        if (!blob && selectedBook.syncScope === "cloud") {
-          blob = await downloadPdf(db, user.id, selectedBook);
+        if (!blob && book.syncScope === "cloud") {
+          blob = await downloadPdf(db, user.id, book);
         }
 
         if (blob) {
-          if (blobUrlRef.current) URL.revokeObjectURL(blobUrlRef.current);
+          if (blobUrlRef.current) {
+            const prev = blobUrlRef.current;
+            window.setTimeout(() => {
+              if (blobUrlRef.current !== prev) URL.revokeObjectURL(prev);
+            }, 1000);
+          }
           const currentBlobUrl = URL.createObjectURL(blob);
           blobUrlRef.current = currentBlobUrl;
           setFileUrl(currentBlobUrl);
@@ -74,21 +82,23 @@ export default function BookViewPage({ params }: PageProps) {
         setIsFetchingFile(false);
       }
     },
-    [selectedBook, db, user.id],
+    [db, user.id],
   );
 
   useEffect(() => {
-    if (!selectedBook) return;
+    const fileId = selectedBook?.fileId;
+    if (!fileId) return;
 
     fetchFileBlob();
 
     return () => {
-      if (blobUrlRef.current) {
-        URL.revokeObjectURL(blobUrlRef.current);
+      const url = blobUrlRef.current;
+      if (url) {
         blobUrlRef.current = null;
+        window.setTimeout(() => URL.revokeObjectURL(url), 500);
       }
     };
-  }, [selectedBook, db, user.id, fetchFileBlob]);
+  }, [selectedBook?.fileId, selectedBook?.syncScope, db, user.id, fetchFileBlob]);
 
   if (isLoading) {
     return (

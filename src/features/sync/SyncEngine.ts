@@ -6,6 +6,7 @@ import { getPendingCount } from "@/lib/outbox";
 import { getProgressSyncEnabled } from "@/lib/settings";
 import { purgeExpiredTombstones } from "@/lib/books";
 import AuthAPI from "@/features/supabase/auth/auth.service";
+import { queryClient } from "@/lib/queryClient";
 import { toast } from "sonner";
 
 const INTERVAL_MS = 60_000;
@@ -176,6 +177,10 @@ class SyncEngine {
       const pullResult = await pullFromCloud(db, user.id, await getProgressSyncEnabled(db));
       await planCoverDownloads(db, user.id);
       await purgeExpiredTombstones(db);
+
+      // The cycle wrote to Dexie (push status marks + pulled rows) outside React
+      // Query mutations, so flush query caches to re-read from Dexie live.
+      await queryClient.invalidateQueries();
 
       const totalPulled = pullResult.books + pullResult.notes + pullResult.readingStates;
       const durationMs = Date.now() - startedAt;

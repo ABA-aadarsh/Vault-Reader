@@ -113,6 +113,8 @@ async function applyBook(
         deletedAt: cloudTime(deletedAt),
         revision,
         baseRevision: revision,
+        fileSyncStatus: "not_downloaded",
+        coverSyncStatus: "not_downloaded",
         syncStatus: "synced",
         updatedAt,
         baseSnapshot: {

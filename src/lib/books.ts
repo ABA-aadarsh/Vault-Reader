@@ -223,6 +223,8 @@ export async function restoreBook(
     .equals(bookId)
     .modify({
       deletedAt: null,
+      fileSyncStatus: "not_downloaded",
+      coverSyncStatus: "not_downloaded",
       syncStatus: "pending",
       updatedAt: now,
       baseSnapshot: { title: book.title, author: book.author, tags: book.tags, isFavourite: book.isFavourite },
@@ -242,6 +244,7 @@ export async function restoreBook(
         imageId: book.imageId,
       },
       baseRevision: book.baseRevision,
+      allowUpsertAfterDelete: true,
     });
     engine.scheduleSync();
   }
