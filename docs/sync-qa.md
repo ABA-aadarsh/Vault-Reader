@@ -18,7 +18,7 @@ Check off each item as it passes.
 - [x] **C1 — Create cloud book on A → appears on B** — Create a book on Device A with sync enabled. After a sync cycle on B, the book's metadata and cover appear on B.
 - [x] **C2 — Open on B downloads PDF** — Open a cloud book on Device B that has no local PDF. The viewer should download the file on open.
 - [x] **C3 — Edit title A / tags B → merge or inbox** — Edit the title on A and tags on B (same base rev). Push both; first wins, second triggers auto-merge or conflict inbox.
-- [ ] **C4 — Edit note both → inbox** — Edit the note on both devices. After sync, a `note_body` conflict appears in the inbox on both. *(Blocked — NoteEditor not wired into UI; `src/features/Note/_components/NoteEditor.tsx` is a placeholder and commented out in the reader page.)*
+- [ ] **C4 — Edit note both → inbox** — Edit the note on both devices. After sync, a `note_body` conflict appears in the inbox on both. *(NoteEditor now wired into the reader page (2026-09-14) — was previously a placeholder/commented out; runnable.)*
 - [x] **C5 — Delete on A → gone on B** — Soft-delete a cloud book on A. After A pushes and B pulls, the book disappears from B's library.
 - [x] **C6 — Offline delete A + offline edit B → conflict UX** — Device A goes offline, deletes a book. Device B goes offline, edits the same book. Both come online and push → `update_vs_delete` conflict inbox.
 - [x] **C7 — Local book stays on A only** — Create a local-only book on A. Never promote. B never sees it.
@@ -54,13 +54,13 @@ Check off each item as it passes.
 
 ### Resolvers
 
-- [ ] **T8 — Note body conflict** — Both edit note → `note_body` conflict → `NoteBodyResolver` opens, pick mine/theirs → winner pushes with `baseRevision = remote.revision`.
+- [ ] **T8 — Note body conflict** — Both edit note → `note_body` conflict → `NoteBodyResolver` opens, pick mine/theirs → winner pushes with `baseRevision = remote.revision`. *(NoteEditor wired into reader page (2026-09-14) — runnable.)*
 - [x] **T9 — Update vs delete (Restore)** — Edit book on A, delete on cloud → `UpdateVsDeleteResolver` → **Restore** → book returns, re-enqueued upsert succeeds.
 - [x] **T10 — Update vs delete (Confirm Delete)** — Same setup → **Confirm Delete** → book soft-deleted, delete pushed, cloud converges.
 
 ### Blocking & interaction safety
 
-- [x] **T11 — Edits blocked while conflicted** — While conflict open: `updateBook`, `softDeleteBook`, `upsertNote`, `deleteNote` all throw (books.ts:140/168, notes.ts:32/92). Verify UI surfaces an error. *(Run 3: book-edit path surfaces conflict toast; delete path swallowed to generic "Failed to delete book" — low-severity UX finding. Note ops N/A — no note UI.)*
+- [x] **T11 — Edits blocked while conflicted** — While conflict open: `updateBook`, `softDeleteBook`, `upsertNote`, `deleteNote` all throw (books.ts:140/168, notes.ts:32/92). Verify UI surfaces an error. *(Run 3: book-edit path surfaces conflict toast; delete path swallowed to generic "Failed to delete book" — low-severity UX finding. Note ops now exercisable via NoteEditor (2026-09-14); re-run to verify note conflict toast.)*
 - [x] **T12 — Pull skips conflicted entities** — Cloud has a newer revision of the conflicted book; pull must NOT overwrite local; conflict stays until resolved.
 - [x] **T13 — Resolve → re-push → clean** — After resolving, entity returns to `synced`, outbox empties, cloud and local revisions match, no stuck state. *(Run 3: resolving from a stale baseRevision re-clashed once — second field_clash resolved, then converged clean.)*
 - [x] **T14 — Cancel resolver** — Closing the resolver dialog leaves conflict `open`, sync status chip still shows `Conflicts(N)`.

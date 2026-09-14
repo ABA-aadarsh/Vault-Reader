@@ -152,17 +152,19 @@ export default function BookViewPage({ params }: PageProps) {
         </div>
       )}
 
-      <PDFViewer
-        fileUrl={fileUrl}
-        className="w-full h-full"
-        onPageChange={(page, totalPages) => {
-          if (selectedBook) {
-            setPage(db, selectedBook.id, page, totalPages);
-          }
-        }}
-      />
+      <div className="flex-1 min-w-0 relative">
+        <PDFViewer
+          fileUrl={fileUrl}
+          className="w-full h-full"
+          onPageChange={(page, totalPages) => {
+            if (selectedBook) {
+              setPage(db, selectedBook.id, page, totalPages);
+            }
+          }}
+        />
+      </div>
 
-      {/* <NoteEditor /> */}
+      <NoteEditor bookId={selectedBook.id} />
     </div>
   );
 }

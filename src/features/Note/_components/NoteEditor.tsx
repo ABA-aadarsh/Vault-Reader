@@ -1,103 +1,123 @@
 "use client";
 
-import React from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Editor } from "@/components/shared/MDXEditor/ForwardRefMDXEditor";
 import { Button } from "@/components/ui/button";
-import { DialogFooter, DialogHeader } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { BlockTypeSelect, BoldItalicUnderlineToggles, ButtonWithTooltip, CreateLink, directivesPlugin, headingsPlugin, insertDirective$, InsertImage, insertJsx$, jsxPlugin, listsPlugin, ListsToggle, markdownShortcutPlugin, quotePlugin, thematicBreakPlugin, toolbarPlugin, UndoRedo, usePublisher, type DirectiveDescriptor, type DirectiveEditorProps, type JsxEditorProps } from "@mdxeditor/editor";
-import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@radix-ui/react-dialog";
-import { Label } from "@radix-ui/react-label";
-import { Separator } from "@radix-ui/react-separator";
-import { FileText, Quote, Check, X } from "lucide-react";
-import { useState } from "react";
-import '@mdxeditor/editor/style.css'
-import "./theme.css"
+import {
+  BlockTypeSelect,
+  BoldItalicUnderlineToggles,
+  ButtonWithTooltip,
+  CreateLink,
+  headingsPlugin,
+  InsertImage,
+  insertJsx$,
+  jsxPlugin,
+  listsPlugin,
+  ListsToggle,
+  markdownShortcutPlugin,
+  quotePlugin,
+  thematicBreakPlugin,
+  toolbarPlugin,
+  UndoRedo,
+  usePublisher,
+  type JsxEditorProps,
+  type MDXEditorMethods,
+} from "@mdxeditor/editor";
+import {
+  ChevronLeft,
+  ChevronRight,
+  FileText,
+  Check,
+  X,
+  StickyNote,
+  Trash2,
+} from "lucide-react";
+import { toast } from "sonner";
+import { useDb } from "@/lib/dexie/db";
+import { deleteNote, upsertNote } from "@/lib/notes";
+import { invalidateNote, useNote } from "@/features/Note/hooks/useNote";
+import "@mdxeditor/editor/style.css";
+import "./theme.css";
+
+const AUTOSAVE_DEBOUNCE_MS = 1000;
 
 function PageButton({ page }: { page: string }) {
   return (
     <button
       className="inline-flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-primary bg-accent/50 border border-border rounded-md hover:bg-accent hover:border-primary/50 transition-colors duration-150 cursor-pointer"
       onClick={() => {
-        console.log(`Navigate to page ${page}`)
+        console.log(`Navigate to page ${page}`);
       }}
     >
       <FileText className="w-3 h-3" />
       Page {page}
     </button>
-  )
+  );
 }
 
 // Enhanced JSX Editor wrapper component with correct prop handling
 function PageButtonEditor({ mdastNode }: JsxEditorProps) {
-  console.log('PageButtonEditor mdastNode:', mdastNode); // Debug log
-  console.log('mdastNode.attributes:', mdastNode.attributes); // Additional debug
-  console.log('mdastNode full structure:', JSON.stringify(mdastNode, null, 2)); // Full structure
-  
   // Correct prop resolution - attributes is an array of {name, value} objects
-  let page = '1'; // default
-  
-  const attributes = (mdastNode.attributes ?? []) as Array<{ name: string; value?: string }>;
-  
+  let page = "1"; // default
+
+  const attributes = (mdastNode.attributes ?? []) as Array<{
+    name: string;
+    value?: string;
+  }>;
+
   if (attributes.length > 0) {
     // Find the attribute with name 'page'
-    const pageAttribute = attributes.find((attr) => attr.name === 'page');
+    const pageAttribute = attributes.find((attr) => attr.name === "page");
     if (pageAttribute && pageAttribute.value) {
       page = pageAttribute.value;
     }
   }
-  
-  console.log('Final resolved page:', page); // Debug log
-  
-  return <PageButton page={String(page)} />
+
+  return <PageButton page={String(page)} />;
 }
 
 // Fixed inline toolbar button component for inserting page buttons
 function InsertPageButton() {
-  const insertJsx = usePublisher(insertJsx$)
-  const [isInputVisible, setIsInputVisible] = useState(false)
-  const [pageNumber, setPageNumber] = useState('')
+  const insertJsx = usePublisher(insertJsx$);
+  const [isInputVisible, setIsInputVisible] = useState(false);
+  const [pageNumber, setPageNumber] = useState("");
 
   const handleInsert = () => {
     if (pageNumber.trim()) {
-      console.log('Inserting JSX with page:', pageNumber.trim()); // Debug log
-      
-      // Try multiple insertion formats to ensure compatibility
       const jsxPayload = {
-        name: 'PageButton',
-        kind: 'text' as const,
-        props: { 
-          page: pageNumber.trim() 
+        name: "PageButton",
+        kind: "text" as const,
+        props: {
+          page: pageNumber.trim(),
         },
         // Add additional properties that might help with prop passing
         attributes: {
-          page: pageNumber.trim()
-        }
-      }
-      
-      console.log('JSX payload:', jsxPayload); // Debug the payload
-      
-      insertJsx(jsxPayload)
-      
-      setPageNumber('')
-      setIsInputVisible(false)
+          page: pageNumber.trim(),
+        },
+      };
+
+      insertJsx(jsxPayload);
+
+      setPageNumber("");
+      setIsInputVisible(false);
     }
-  }
+  };
 
   const handleCancel = () => {
-    setPageNumber('')
-    setIsInputVisible(false)
-  }
+    setPageNumber("");
+    setIsInputVisible(false);
+  };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      e.preventDefault()
-      handleInsert()
-    } else if (e.key === 'Escape') {
-      e.preventDefault()
-      handleCancel()
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleInsert();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      handleCancel();
     }
-  }
+  };
 
   if (isInputVisible) {
     return (
@@ -124,210 +144,306 @@ function InsertPageButton() {
           <X className="w-3 h-3" />
         </button>
       </div>
-    )
+    );
   }
 
   return (
-    <ButtonWithTooltip title="Insert page reference" onClick={() => setIsInputVisible(true)}>
+    <ButtonWithTooltip
+      title="Insert page reference"
+      onClick={() => setIsInputVisible(true)}
+    >
       <FileText className="w-4 h-4" />
     </ButtonWithTooltip>
-  )
+  );
 }
 
-// Minimal Custom Quote Block Button
-function InsertCustomQuote() {
-  const insertDirective = usePublisher(insertDirective$)
-  const [open, setOpen] = useState(false)
-  const [author, setAuthor] = useState('')
-  const [quote, setQuote] = useState('')
+function SaveStatusLabel({
+  saveState,
+  syncStatus,
+}: {
+  saveState: "idle" | "dirty" | "saving" | "error";
+  syncStatus?: "synced" | "pending" | "conflict" | "failed";
+}) {
+  if (saveState === "saving") return <>Saving…</>;
+  if (saveState === "dirty") return <>Unsaved changes</>;
+  if (saveState === "error")
+    return <span className="text-destructive">Save failed</span>;
+  if (syncStatus === "pending") return <>Waiting to sync</>;
+  if (syncStatus === "failed")
+    return <span className="text-destructive">Sync failed</span>;
+  if (syncStatus === "conflict")
+    return <span className="text-destructive">Conflict</span>;
+  return <>Saved</>;
+}
 
-  const handleInsert = () => {
-    if (quote.trim()) {
-      insertDirective({
-        type: 'containerDirective',
-        name: 'custom-quote',
-        attributes: { author: author.trim() || 'Anonymous' }
-      })
-      setOpen(false)
-      setAuthor('')
-      setQuote('')
+export const NoteEditor = ({ bookId }: { bookId: string }) => {
+  const db = useDb();
+  const editorRef = useRef<MDXEditorMethods>(null);
+  const { data: note } = useNote(bookId);
+
+  const [open, setOpen] = useState(true);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [saveState, setSaveState] = useState<
+    "idle" | "dirty" | "saving" | "error"
+  >("idle");
+
+  // Latest editor content, and the last body persisted to the DB.
+  const latestMdRef = useRef("");
+  const persistedMdRef = useRef("");
+  const dirtyRef = useRef(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const savePromiseRef = useRef<Promise<void> | null>(null);
+
+  const conflicted = note?.syncStatus === "conflict";
+
+  // Apply the DB note to the editor when it is not dirty.
+  useEffect(() => {
+    if (!editorRef.current) return;
+    if (dirtyRef.current) return;
+    const body = note?.body ?? "";
+    if (body === persistedMdRef.current && body === latestMdRef.current) return;
+    editorRef.current.setMarkdown(body);
+    latestMdRef.current = body;
+    persistedMdRef.current = body;
+    dirtyRef.current = false;
+    setSaveState("idle");
+  }, [note]);
+
+  const persist = useCallback(async () => {
+    if (savePromiseRef.current) return;
+    savePromiseRef.current = (async () => {
+      while (true) {
+        const md = latestMdRef.current;
+        if (md === persistedMdRef.current) break;
+        setSaveState("saving");
+        try {
+          await upsertNote(db, bookId, md);
+          persistedMdRef.current = md;
+          if (latestMdRef.current === md) {
+            dirtyRef.current = false;
+            setSaveState("idle");
+          }
+          await invalidateNote(bookId);
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          toast.error(`Failed to save note: ${message}`);
+          dirtyRef.current = false;
+          setSaveState("error");
+          break;
+        }
+      }
+    })().finally(() => {
+      savePromiseRef.current = null;
+    });
+  }, [db, bookId]);
+
+  const flush = useCallback(() => {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
     }
+    persist();
+  }, [persist]);
+
+  const handleMarkdownChange = useCallback(
+    (markdown: string) => {
+      latestMdRef.current = markdown;
+      dirtyRef.current = true;
+      setSaveState("dirty");
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(flush, AUTOSAVE_DEBOUNCE_MS);
+    },
+    [flush],
+  );
+
+  // Flush pending edits when leaving the page.
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+        debounceRef.current = null;
+      }
+      persist();
+    };
+  }, [persist]);
+
+  const handleDelete = async () => {
+    try {
+      await deleteNote(db, bookId);
+      setConfirmDelete(false);
+      toast.success("Note deleted");
+      await invalidateNote(bookId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      toast.error(`Failed to delete note: ${message}`);
+    }
+  };
+
+  const openConflictInbox = () => {
+    window.dispatchEvent(new CustomEvent("open-conflict-inbox"));
+  };
+
+  if (!open) {
+    return (
+      <div className="h-screen shrink-0 border-l border-border bg-background flex flex-col items-center pt-4 gap-4 w-10">
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          title="Open notes"
+          aria-label="Open notes"
+          className="text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+        >
+          <ChevronLeft className="w-4 h-4" />
+        </button>
+        <StickyNote className="w-4 h-4 text-muted-foreground" />
+      </div>
+    );
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <ButtonWithTooltip title="Insert quote block" onClick={() => setOpen(true)}>
-          <Quote className="w-4 h-4" />
-        </ButtonWithTooltip>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-md bg-popover border border-border rounded-lg shadow-lg">
-        <DialogHeader className="space-y-2">
-          <DialogTitle className="text-lg font-semibold text-popover-foreground">
-            Insert Quote
-          </DialogTitle>
-          <DialogDescription className="text-sm text-muted-foreground">
-            Add a quote block with optional attribution.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4 py-4">
-          <div className="space-y-2">
-            <Label htmlFor="quote-text" className="text-sm font-medium text-popover-foreground">
-              Quote text
-            </Label>
-            <textarea
-              id="quote-text"
-              placeholder="Enter quote text..."
-              value={quote}
-              onChange={(e) => setQuote(e.target.value)}
-              rows={3}
-              className="w-full px-3 py-2 text-sm bg-background border border-input rounded-md text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="quote-author" className="text-sm font-medium text-popover-foreground">
-              Author (optional)
-            </Label>
-            <Input
-              id="quote-author"
-              placeholder="Author name"
-              value={author}
-              onChange={(e) => setAuthor(e.target.value)}
-              className="text-sm"
-            />
-          </div>
+    <aside className="h-screen w-[420px] shrink-0 border-l border-border bg-background flex flex-col overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+        <div className="flex items-center gap-2">
+          <StickyNote className="w-4 h-4 text-muted-foreground" />
+          <h2 className="text-sm font-semibold">Notes</h2>
         </div>
-        <DialogFooter className="flex justify-end gap-2">
-          <Button
-            variant="outline"
+        <div className="flex items-center gap-1">
+          <span className="text-[11px] text-muted-foreground">
+            <SaveStatusLabel
+              saveState={saveState}
+              syncStatus={note?.syncStatus}
+            />
+          </span>
+          {!conflicted && note && (
+            <button
+              type="button"
+              onClick={() => setConfirmDelete((v) => !v)}
+              title="Delete note"
+              aria-label="Delete note"
+              className="text-muted-foreground hover:text-destructive transition-colors cursor-pointer p-1"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
+          <button
+            type="button"
             onClick={() => setOpen(false)}
-            className="text-sm"
+            title="Collapse notes"
+            aria-label="Collapse notes"
+            className="text-muted-foreground hover:text-foreground transition-colors cursor-pointer p-1"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {conflicted && (
+        <div className="flex items-center justify-between gap-2 px-3 py-2 bg-destructive/10 border-b border-border">
+          <span className="text-xs text-destructive">
+            Sync conflict — resolve to edit
+          </span>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={openConflictInbox}
+            className="h-7 text-xs cursor-pointer"
+          >
+            View conflicts
+          </Button>
+        </div>
+      )}
+
+      {confirmDelete && (
+        <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-muted/30">
+          <span className="text-xs flex-1">Delete this note?</span>
+          <Button
+            size="sm"
+            variant="destructive"
+            onClick={handleDelete}
+            className="h-7 text-xs cursor-pointer"
+          >
+            Delete
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setConfirmDelete(false)}
+            className="h-7 text-xs cursor-pointer"
           >
             Cancel
           </Button>
-          <Button
-            onClick={handleInsert}
-            disabled={!quote.trim()}
-            className="text-sm"
-          >
-            Insert
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-// Clean minimal quote component
-function CustomQuote({ author, children }: { author: string; children: React.ReactNode }) {
-  return (
-    <blockquote className="my-4 pl-4 border-l-2 border-border bg-accent/30 py-2 pr-3 rounded-r-md">
-      <div className="text-foreground italic mb-1 text-sm leading-relaxed">
-        &quot;{children}&quot;
-      </div>
-      {author && author !== 'Anonymous' && (
-        <footer className="text-xs text-muted-foreground">
-          — {author}
-        </footer>
+        </div>
       )}
-    </blockquote>
-  )
-}
 
-// Custom quote directive with proper children handling
-const customQuoteDirective: DirectiveDescriptor = {
-  name: 'custom-quote',
-  testNode: (node) => {
-    return node.name === 'custom-quote'
-  },
-  attributes: ['author'],
-  hasChildren: true,
-  Editor: ({ mdastNode }: DirectiveEditorProps) => {
-    const content = (mdastNode.children?.[0] as { value?: string } | undefined)?.value || ''
-    const author = (mdastNode.attributes as Record<string, unknown> | undefined)?.['author'] as string | undefined
-    return (
-      <CustomQuote author={author || 'Anonymous'}>
-        {content}
-      </CustomQuote>
-    )
-  }
-}
-
-export const NoteEditor = () => {
-  return (
-    <div className="w-full">
-      <Editor
-        markdown=""
-        className="prose prose-sm w-full max-w-full prose-invert dark-theme dark-editor"
-        plugins={[
-          headingsPlugin(),
-          listsPlugin(),
-          quotePlugin(),
-          thematicBreakPlugin(),
-          markdownShortcutPlugin(),
-          jsxPlugin({
-            jsxComponentDescriptors: [
-              {
-                name: 'PageButton',
-                kind: 'text',
-                source: './components/PageButton',
-                props: [
-                  { 
-                    name: 'page', 
-                    type: 'string'
-                  }
+      <div
+        className={`flex-1 overflow-hidden relative ${conflicted ? "pointer-events-none select-none opacity-80" : ""}`}
+      >
+        <div className="h-full overflow-auto">
+          <Editor
+            ref={editorRef}
+            markdown=""
+            onChange={handleMarkdownChange}
+            className="prose prose-sm w-full max-w-full prose-invert dark-theme dark-editor"
+            plugins={[
+              headingsPlugin(),
+              listsPlugin(),
+              quotePlugin(),
+              thematicBreakPlugin(),
+              markdownShortcutPlugin(),
+              jsxPlugin({
+                jsxComponentDescriptors: [
+                  {
+                    name: "PageButton",
+                    kind: "text",
+                    source: "./components/PageButton",
+                    props: [
+                      {
+                        name: "page",
+                        type: "string",
+                      },
+                    ],
+                    hasChildren: false,
+                    Editor: PageButtonEditor,
+                  },
                 ],
-                hasChildren: false,
-                Editor: PageButtonEditor
-              }
-            ]
-          }),
-          directivesPlugin({
-            directiveDescriptors: [customQuoteDirective]
-          }),
-          toolbarPlugin({
-            toolbarContents: () => (
-              <div className="flex items-center gap-1 p-2 bg-card text-card-foreground m-0 border-b border-border">
-                <div className="flex flex-row items-center">
-                  <UndoRedo />
-                </div>
-                
-                <Separator orientation="vertical" className="mx-2 h-5" />
-                
-                <div className="flex items-center">
-                  <BoldItalicUnderlineToggles />
-                </div>
-                
-                <Separator orientation="vertical" className="mx-2 h-5" />
-                
-                <div className="flex items-center">
-                  <BlockTypeSelect />
-                </div>
-                
-                <Separator orientation="vertical" className="mx-2 h-5" />
-                
-                <div className="flex items-center">
-                  <CreateLink />
-                  <InsertImage />
-                </div>
-                
-                <Separator orientation="vertical" className="mx-2 h-5" />
-                
-                <div className="flex items-center">
-                  <ListsToggle />
-                </div>
-                
-                <Separator orientation="vertical" className="mx-2 h-5" />
-                
-                <div className="flex items-center">
-                  <InsertPageButton />
-                  <InsertCustomQuote />
-                </div>
-              </div>
-            )
-          })
-        ]}
-      />
-    </div>
-  )
-}
+              }),
+              toolbarPlugin({
+                toolbarContents: () => (
+                  <div className="w-full grid grid-cols-2  gap-y-1 items-center p-2 bg-card text-card-foreground m-0 border-b border-border">
+                    <div className="flex items-center">
+                      <UndoRedo />
+                      <BoldItalicUnderlineToggles />
+                    </div>
+
+                    {/* <div className="flex items-center">
+                      <BoldItalicUnderlineToggles />
+                    </div> */}
+
+                    <div className="flex items-center">
+                      <BlockTypeSelect />
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <CreateLink />
+                      <InsertImage />
+                      <ListsToggle />
+                    </div>
+                    {/* 
+                    <div className="flex items-center">
+                      <ListsToggle />
+                    </div> */}
+
+                    <div className="flex items-center">
+                      <InsertPageButton />
+                    </div>
+                  </div>
+                ),
+              }),
+            ]}
+          />
+        </div>
+      </div>
+    </aside>
+  );
+};
