@@ -15,10 +15,10 @@ import Image from "next/image";
 import { PanelLeftClose, Search, Star, Trash2 } from "lucide-react";
 import { useSearchLauncher } from "@/features/Search/provider/SearchLauncherProvider";
 import { useRouter } from "next/navigation";
-import { SyncStatusChip } from "@/features/sync/SyncStatusChip";
-import { SyncNowButton } from "@/features/sync/SyncNowButton";
+import { SyncStatusChip } from "@/features/Sync/SyncStatusChip";
+import { SyncNowButton } from "@/features/Sync/SyncNowButton";
 import { useBooks } from "@/features/Books/hooks/useBooks";
-import { useAuth } from "@/features/supabase/auth/components/RequireAuth";
+import { useAuth } from "@/features/Supabase/auth/components/RequireAuth";
 import type { Book } from "@/lib/domain";
 
 function SidebarBookList({ books, label }: { books: Book[]; label: string }) {

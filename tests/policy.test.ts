@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { attemptAutoMerge } from "@/features/sync/policy";
+import { attemptAutoMerge } from "@/features/Sync/policy";
 import type { BookEntry } from "@/lib/dexie/types";
 
 function makeBook(overrides: Partial<BookEntry> = {}): BookEntry {

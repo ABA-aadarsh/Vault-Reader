@@ -1,8 +1,7 @@
 import type { BookVaultDexie } from "./dexie/schema";
-import { readingStateToDomain } from "./mappers";
 import { enqueue } from "./outbox";
 import { getProgressSyncEnabled } from "./settings";
-import { engine } from "@/features/sync/SyncEngine";
+import { scheduleSync } from "./sync-scheduler";
 import type { ReadingState } from "./domain";
 
 // Throttle interval: skip writes if less than 2s since last update
@@ -15,8 +14,7 @@ export async function getReadingState(
   db: BookVaultDexie,
   bookId: string,
 ): Promise<ReadingState | undefined> {
-  const entry = await db.readingState.get(bookId);
-  return entry ? readingStateToDomain(entry) : undefined;
+  return db.readingState.get(bookId);
 }
 
 /**
@@ -73,6 +71,6 @@ export async function setPage(
       payload: { page, percent },
       baseRevision: existing?.baseRevision ?? 0,
     });
-    engine.scheduleSync();
+    scheduleSync();
   }
 }

@@ -1,6 +1,7 @@
 "use client";
 
-import { Book, BookCard, type VersionStatus } from "@/features/Books/_components/BookCard";
+import { BookCard, type VersionStatus } from "@/features/Books/_components/BookCard";
+import { type BookViewModel, toBookViewModel } from "@/features/Books/types";
 import { useState, useEffect } from "react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { LayoutGrid, List } from "lucide-react";
@@ -33,16 +34,16 @@ function versionStatusFrom(syncStatus?: string): VersionStatus {
 export default function Page() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const { data: booksList, isLoading, isError } = useBooks();
-  const [booksWithImages, setBooksWithImages] = useState<Book[]>([]);
+  const [booksWithImages, setBooksWithImages] = useState<BookViewModel[]>([]);
   const db = useDb();
   const deleteBook = useDeleteBook();
   const promoteBook = usePromoteBook();
   const removeDownload = useRemoveDownload();
   const { data: failedOutbox } = useFailedOutbox();
 
-  const [editingBook, setEditingBook] = useState<Book | null>(null);
-  const [deletingBook, setDeletingBook] = useState<Book | null>(null);
-  const [promotingBook, setPromotingBook] = useState<Book | null>(null);
+  const [editingBook, setEditingBook] = useState<BookViewModel | null>(null);
+  const [deletingBook, setDeletingBook] = useState<BookViewModel | null>(null);
+  const [promotingBook, setPromotingBook] = useState<BookViewModel | null>(null);
 
   const failedOpFor = (docId: string) =>
     failedOutbox?.find((op) => op.entityId === docId);
@@ -51,23 +52,12 @@ export default function Page() {
   useEffect(() => {
     if (!booksList) return;
 
-    let booksWithImageUrls: Book[] = [];
+    let booksWithImageUrls: BookViewModel[] = [];
 
     const loadImages = async () => {
       booksWithImageUrls = await Promise.all(
         booksList.map(async (book) => {
-          const uiBook: Book = {
-            title: book.title,
-            author: book.author,
-            tags: book.tags,
-            fileId: book.fileId,
-            docId: book.id,
-            isFavourite: book.isFavourite,
-            imageId: book.imageId,
-            syncStatus: book.syncStatus,
-            syncScope: book.syncScope,
-            fileSyncStatus: book.fileSyncStatus,
-          };
+          const uiBook: BookViewModel = toBookViewModel(book);
           try {
             if (book.imageId) {
               const imageBlob = await getImageBlob(db, book.imageId);
@@ -101,18 +91,7 @@ export default function Page() {
 
   const displayBooks = booksWithImages.length > 0
     ? booksWithImages
-    : (booksList || []).map((b) => ({
-        title: b.title,
-        author: b.author,
-        tags: b.tags,
-        fileId: b.fileId,
-        docId: b.id,
-        isFavourite: b.isFavourite,
-        imageId: b.imageId,
-        syncStatus: b.syncStatus,
-        syncScope: b.syncScope,
-        fileSyncStatus: b.fileSyncStatus,
-      } as Book));
+    : (booksList || []).map((b) => toBookViewModel(b));
 
   const handleConfirmDelete = async () => {
     if (!deletingBook) return;
@@ -139,7 +118,7 @@ export default function Page() {
     }
   };
 
-  const handleRemoveDownload = async (book: Book) => {
+  const handleRemoveDownload = async (book: BookViewModel) => {
     try {
       await removeDownload.mutateAsync(book.docId);
       toast.success("Download removed");

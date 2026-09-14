@@ -6,15 +6,15 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import { useAuth } from "@/features/supabase/auth/components/RequireAuth";
+import { useAuth } from "@/features/Supabase/auth/components/RequireAuth";
 import { useDb } from "@/lib/dexie/db";
-import AuthAPI from "@/features/supabase/auth/auth.service";
+import AuthAPI from "@/features/Supabase/auth/auth.service";
 import { useRouter } from "next/navigation";
 import {
   getProgressSyncEnabled,
   setProgressSyncEnabled,
 } from "@/lib/settings";
-import { useSyncStatus } from "@/features/sync/useSyncStatus";
+import { useSyncStatus } from "@/features/Sync/useSyncStatus";
 import { getTheme, setTheme, type Theme } from "@/lib/theme";
 
 interface Tab {

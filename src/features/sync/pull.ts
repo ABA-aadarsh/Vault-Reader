@@ -2,7 +2,7 @@ import type { BookVaultDexie } from "@/lib/dexie/schema";
 import type { BookEntry, NoteEntry } from "@/lib/dexie/types";
 import { removeFile } from "@/lib/files";
 import { removeImage } from "@/lib/images";
-import { supabase } from "@/features/supabase/index";
+import { supabase } from "@/features/Supabase/index";
 
 const PAGE_SIZE = 100;
 

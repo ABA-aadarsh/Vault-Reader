@@ -1,12 +1,13 @@
 import { getDb } from "@/lib/dexie/db";
-import { pushOutbox } from "@/features/sync/push";
-import { pullFromCloud } from "@/features/sync/pull";
-import { planCoverDownloads } from "@/features/sync/filePlanner";
+import { pushOutbox } from "@/features/Sync/push";
+import { pullFromCloud } from "@/features/Sync/pull";
+import { planCoverDownloads } from "@/features/Sync/filePlanner";
 import { getPendingCount } from "@/lib/outbox";
 import { getProgressSyncEnabled } from "@/lib/settings";
 import { purgeExpiredTombstones } from "@/lib/books";
-import AuthAPI from "@/features/supabase/auth/auth.service";
+import AuthAPI from "@/features/Supabase/auth/auth.service";
 import { queryClient } from "@/lib/queryClient";
+import { registerScheduler } from "@/lib/sync-scheduler";
 import { toast } from "sonner";
 
 const INTERVAL_MS = 60_000;
@@ -278,3 +279,5 @@ class SyncEngine {
 }
 
 export const engine = new SyncEngine();
+
+registerScheduler(() => engine.scheduleSync());

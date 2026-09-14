@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { ConflictEntry } from "@/lib/dexie/types";
-import { resolveConflict } from "@/features/sync/conflicts";
+import { resolveConflict } from "@/features/Sync/conflicts";
 import { getDb } from "@/lib/dexie/db";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";

@@ -22,16 +22,6 @@ export class BookVaultDexie extends Dexie {
 
   constructor(userId: string) {
     super(`bookVaultDB:${userId}`);
-    this.version(1).stores({
-      books: "id, title, syncScope, syncStatus, deletedAt, updatedAt",
-      notes: "bookId, syncStatus, deletedAt, updatedAt",
-      readingState: "bookId, updatedAt",
-      files: "fileId",
-      images: "imageId",
-      outbox: "++id, entityType, entityId, createdAt, nextAttemptAt",
-      conflicts: "++id, entityType, entityId, bookId, status, createdAt",
-      syncState: "key",
-    });
     this.version(2).stores({
       books: "id, fileId, title, syncScope, syncStatus, deletedAt, updatedAt",
     });

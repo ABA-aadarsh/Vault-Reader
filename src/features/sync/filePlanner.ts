@@ -1,6 +1,6 @@
 import type { BookVaultDexie } from "@/lib/dexie/schema";
 import type { BookEntry } from "@/lib/dexie/types";
-import { supabase } from "@/features/supabase/index";
+import { supabase } from "@/features/Supabase/index";
 
 const FILE_NAME = process.env.NEXT_PUBLIC_SUPABASE_BUCKET_FILE_NAME!;
 const IMAGE_NAME = process.env.NEXT_PUBLIC_SUPABASE_BUCKET_IMAGE_NAME!;

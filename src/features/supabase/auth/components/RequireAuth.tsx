@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { supabase } from '../../index'
 import AuthAPI from '../auth.service'
 import type { Session, User } from '@supabase/supabase-js'
-import { engine } from '@/features/sync/SyncEngine'
+import { engine } from '@/features/Sync/SyncEngine'
 
 interface RequireAuthProps {
   children: React.ReactNode

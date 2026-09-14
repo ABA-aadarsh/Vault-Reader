@@ -14,8 +14,7 @@ import { useRecentlyDeleted } from "@/features/Books/hooks/useRecentlyDeleted";
 import { useRestoreBook } from "@/features/Books/hooks/useRestoreBook";
 import { useDeleteBook } from "@/features/Books/hooks/useDeleteBook";
 import { toast } from "sonner";
-
-const TOMBSTONE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+import { TOMBSTONE_TTL_MS } from "@/lib/domain";
 
 export function RecentlyDeletedSheet() {
   const [open, setOpen] = useState(false);

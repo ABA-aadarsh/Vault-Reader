@@ -1,7 +1,7 @@
 import type { BookVaultDexie } from "@/lib/dexie/schema";
 import type { ConflictEntry } from "@/lib/dexie/types";
 import { enqueue } from "@/lib/outbox";
-import { engine } from "@/features/sync/SyncEngine";
+import { engine } from "@/features/Sync/SyncEngine";
 
 export async function createConflict(
   db: BookVaultDexie,

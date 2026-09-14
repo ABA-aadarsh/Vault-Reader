@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import { BookVaultDexie } from "@/lib/dexie/schema";
 import { enqueue } from "@/lib/outbox";
-import { pushOutbox } from "@/features/sync/push";
+import { pushOutbox } from "@/features/Sync/push";
 
 const { storageFromMock, rpcMock, fromMock } = vi.hoisted(() => ({
   storageFromMock: vi.fn().mockReturnValue({
@@ -12,16 +12,12 @@ const { storageFromMock, rpcMock, fromMock } = vi.hoisted(() => ({
   fromMock: vi.fn(),
 }));
 
-vi.mock("@/features/supabase/index", () => ({
+vi.mock("@/features/Supabase/index", () => ({
   supabase: {
     storage: { from: storageFromMock },
     rpc: rpcMock,
     from: fromMock,
   },
-}));
-
-vi.mock("@/features/sync/SyncEngine", () => ({
-  engine: { scheduleSync: vi.fn() },
 }));
 
 let db: BookVaultDexie;

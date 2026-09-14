@@ -9,10 +9,10 @@ import { Loader2, FileWarning, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useDb } from "@/lib/dexie/db";
 import { getFileBlob } from "@/lib/files";
-import { downloadPdf } from "@/features/sync/filePlanner";
+import { downloadPdf } from "@/features/Sync/filePlanner";
 import { setPage } from "@/lib/readingState";
 import type { Book } from "@/lib/domain";
-import { useAuth } from "@/features/supabase/auth/components/RequireAuth";
+import { useAuth } from "@/features/Supabase/auth/components/RequireAuth";
 import { useRouter } from "next/navigation";
 
 interface PageProps {

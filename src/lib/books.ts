@@ -1,12 +1,9 @@
 import { v4 as uuidv4 } from "uuid";
 import type { BookVaultDexie } from "./dexie/schema";
-import { bookToDomain } from "./mappers";
-import type { Book, SyncScope } from "./domain";
+import { TOMBSTONE_TTL_MS, type Book, type SyncScope } from "./domain";
 import { enqueue } from "./outbox";
-import { engine } from "@/features/sync/SyncEngine";
+import { scheduleSync } from "./sync-scheduler";
 import { removeFile } from "./files";
-
-const TOMBSTONE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 export interface CreateBookParams {
   title: string;
@@ -79,7 +76,7 @@ export async function createBook(
       payload: { title, author, tags, fileId, isFavourite, imageId },
       baseRevision: 0,
     });
-    engine.scheduleSync();
+    scheduleSync();
   }
 
   return bookId;
@@ -91,32 +88,29 @@ export async function createBook(
 export async function listBooks(db: BookVaultDexie): Promise<Book[]> {
   // IndexedDB omits null keys from the deletedAt index, so a where().equals(null)
   // query is impossible in Dexie (null is rejected as a key). Filter in memory.
-  const entries = (await db.books.toArray()).filter((b) => b.deletedAt === null);
-  return entries.map(bookToDomain);
+  return (await db.books.toArray()).filter((b) => b.deletedAt === null);
 }
 
 /**
  * List only cloud-scoped non-deleted books.
  */
 export async function listCloudBooks(db: BookVaultDexie): Promise<Book[]> {
-  const entries = await db.books
+  return db.books
     .where("syncScope")
     .equals("cloud")
     .and((b) => b.deletedAt === null)
     .toArray();
-  return entries.map(bookToDomain);
 }
 
 /**
  * List soft-deleted cloud books (Recently deleted).
  */
 export async function listDeletedBooks(db: BookVaultDexie): Promise<Book[]> {
-  const entries = await db.books
+  return db.books
     .where("syncScope")
     .equals("cloud")
     .and((b) => b.deletedAt !== null)
     .toArray();
-  return entries.map(bookToDomain);
 }
 
 /**
@@ -126,8 +120,7 @@ export async function getBook(
   db: BookVaultDexie,
   bookId: string,
 ): Promise<Book | undefined> {
-  const entry = await db.books.get(bookId);
-  return entry ? bookToDomain(entry) : undefined;
+  return db.books.get(bookId);
 }
 
 /**
@@ -137,8 +130,7 @@ export async function getBookByFileId(
   db: BookVaultDexie,
   fileId: string,
 ): Promise<Book | undefined> {
-  const entry = await db.books.where("fileId").equals(fileId).first();
-  return entry ? bookToDomain(entry) : undefined;
+  return db.books.where("fileId").equals(fileId).first();
 }
 
 /**
@@ -167,7 +159,7 @@ export async function updateBook(
       payload: updates,
       baseRevision: book.baseRevision,
     });
-    engine.scheduleSync();
+    scheduleSync();
   }
 }
 
@@ -199,7 +191,7 @@ export async function softDeleteBook(
       payload: {},
       baseRevision: book.baseRevision,
     });
-    engine.scheduleSync();
+    scheduleSync();
   } else {
     // Local-only: hard delete immediately
     await hardPurgeLocal(db, bookId);
@@ -246,7 +238,7 @@ export async function restoreBook(
       baseRevision: book.baseRevision,
       allowUpsertAfterDelete: true,
     });
-    engine.scheduleSync();
+    scheduleSync();
   }
 }
 
@@ -348,5 +340,5 @@ export async function promoteToCloud(
     },
     baseRevision: 0,
   });
-  engine.scheduleSync();
+  scheduleSync();
 }

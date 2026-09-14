@@ -12,35 +12,21 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import { BookMenu } from "./BookMenu";
+import type { BookViewModel } from "@/features/Books/types";
 import type { OutboxEntry } from "@/lib/dexie/types";
 import { useRetryOutbox, useDiscardOutbox } from "@/features/Books/hooks/useFailedOutbox";
 
 export type VersionStatus = "consistent" | "behind" | "colliding";
 
-export type Book = {
-  title: string;
-  author: string;
-  tags: string[];
-  fileId: string;
-  docId: string;
-  isFavourite?: boolean;
-  note?: string;
-  image?: string | null;
-  imageId?: string | null;
-  syncStatus?: "synced" | "pending" | "conflict" | "failed";
-  syncScope?: "local" | "cloud";
-  fileSyncStatus?: "not_downloaded" | "downloading" | "present" | "failed";
-};
-
 type BookCardProps = {
-  book: Book;
+  book: BookViewModel;
   type?: "grid" | "list";
   versionStatus?: VersionStatus;
   failedOp?: OutboxEntry;
-  onEdit?: (book: Book) => void;
-  onDelete?: (book: Book) => void;
-  onPromote?: (book: Book) => void;
-  onRemoveDownload?: (book: Book) => void;
+  onEdit?: (book: BookViewModel) => void;
+  onDelete?: (book: BookViewModel) => void;
+  onPromote?: (book: BookViewModel) => void;
+  onRemoveDownload?: (book: BookViewModel) => void;
 };
 
 function FailedOpMenu({ failedOp }: { failedOp: OutboxEntry }) {

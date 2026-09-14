@@ -2,14 +2,14 @@
 
 import { useEffect, useState, useCallback } from "react";
 import type { ConflictEntry } from "@/lib/dexie/types";
-import { getOpenConflicts } from "@/features/sync/conflicts";
+import { getOpenConflicts } from "@/features/Sync/conflicts";
 import { getDb } from "@/lib/dexie/db";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle } from "lucide-react";
-import { FieldClashResolver } from "@/features/sync/resolvers/FieldClashResolver";
-import { NoteBodyResolver } from "@/features/sync/resolvers/NoteBodyResolver";
-import { UpdateVsDeleteResolver } from "@/features/sync/resolvers/UpdateVsDeleteResolver";
+import { FieldClashResolver } from "@/features/Sync/resolvers/FieldClashResolver";
+import { NoteBodyResolver } from "@/features/Sync/resolvers/NoteBodyResolver";
+import { UpdateVsDeleteResolver } from "@/features/Sync/resolvers/UpdateVsDeleteResolver";
 
 export function ConflictInbox() {
   const [open, setOpen] = useState(false);

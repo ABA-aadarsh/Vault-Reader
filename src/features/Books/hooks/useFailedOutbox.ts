@@ -3,7 +3,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useDb } from "@/lib/dexie/db";
 import { getFailedOutbox, retryOutboxEntry, discardOutboxEntry } from "@/lib/outbox";
-import { engine } from "@/features/sync/SyncEngine";
+import { engine } from "@/features/Sync/SyncEngine";
 import type { OutboxEntry } from "@/lib/dexie/types";
 
 export function useFailedOutbox() {

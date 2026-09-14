@@ -1,11 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { BookVaultDexie } from "@/lib/dexie/schema";
 import type { BookEntry } from "@/lib/dexie/types";
 import { restoreBook, softDeleteBook } from "@/lib/books";
-
-vi.mock("@/features/sync/SyncEngine", () => ({
-  engine: { scheduleSync: vi.fn() },
-}));
 
 let db: BookVaultDexie;
 

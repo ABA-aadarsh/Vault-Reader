@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { Search, File, ArrowRight } from "lucide-react";
 import { useSearchLauncher } from "../provider/SearchLauncherProvider";
-import OpenBookLibraryAPI from "@/features/BookSearch/functions";
+import OpenBookLibraryAPI from "@/features/Search/api/openLibrary";
 
 export function SearchLauncher() {
   const { open: isSearchLauncherOpen, onClose: closeSearchLauncher, onOpen: openSearchLauncher } = useSearchLauncher();

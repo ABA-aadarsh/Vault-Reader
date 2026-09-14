@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 import { BookVaultDexie } from "./schema";
-import { engine } from "@/features/sync/SyncEngine";
+import { engine } from "@/features/Sync/SyncEngine";
 
 let _db: BookVaultDexie | null = null;
 

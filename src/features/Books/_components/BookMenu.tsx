@@ -2,15 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import { MoreVertical, Pencil, CloudUpload, Download, Trash2 } from "lucide-react";
-import type { Book } from "./BookCard";
-import { useAuth } from "@/features/supabase/auth/components/RequireAuth";
+import type { BookViewModel } from "@/features/Books/types";
+import { useAuth } from "@/features/Supabase/auth/components/RequireAuth";
 
 interface BookMenuProps {
-  book: Book;
-  onEdit?: (book: Book) => void;
-  onPromote?: (book: Book) => void;
-  onRemoveDownload?: (book: Book) => void;
-  onDelete?: (book: Book) => void;
+  book: BookViewModel;
+  onEdit?: (book: BookViewModel) => void;
+  onPromote?: (book: BookViewModel) => void;
+  onRemoveDownload?: (book: BookViewModel) => void;
+  onDelete?: (book: BookViewModel) => void;
 }
 
 function MenuItem({
@@ -74,7 +74,7 @@ export function BookMenu({
     return () => document.removeEventListener("mousedown", onClick);
   }, [open]);
 
-  const trigger = (fn?: (book: Book) => void) => () => {
+  const trigger = (fn?: (book: BookViewModel) => void) => () => {
     setOpen(false);
     fn?.(book);
   };

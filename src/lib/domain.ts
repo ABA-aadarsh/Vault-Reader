@@ -50,3 +50,5 @@ export interface ReadingState {
 export type SyncScope = "local" | "cloud";
 export type SyncStatus = "synced" | "pending" | "conflict" | "failed";
 export type FileSyncStatus = "not_downloaded" | "downloading" | "present" | "failed";
+
+export const TOMBSTONE_TTL_MS = 30 * 24 * 60 * 60 * 1000;

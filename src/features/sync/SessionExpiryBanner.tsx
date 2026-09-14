@@ -4,8 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { supabase } from "@/features/supabase";
-import { useAuth } from "@/features/supabase/auth/components/RequireAuth";
+import { supabase } from "@/features/Supabase";
+import { useAuth } from "@/features/Supabase/auth/components/RequireAuth";
 
 export function SessionExpiryBanner() {
   const router = useRouter();
