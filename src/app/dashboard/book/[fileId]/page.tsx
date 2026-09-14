@@ -17,12 +17,12 @@ import { useRouter } from "next/navigation";
 
 interface PageProps {
   params: Promise<{
-    bookId: string;
+    fileId: string;
   }>;
 }
 
 export default function BookViewPage({ params }: PageProps) {
-  const { bookId } = React.use(params);
+  const { fileId } = React.use(params);
   const { data: books, isLoading } = useBooks();
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
   const [fileUrl, setFileUrl] = useState<string | null>(null);
@@ -51,10 +51,10 @@ export default function BookViewPage({ params }: PageProps) {
   // Find the book in the list
   useEffect(() => {
     if (!isLoading) {
-      const book = books?.find((b) => b.fileId === bookId);
+      const book = books?.find((b) => b.fileId === fileId);
       setSelectedBook(book || null);
     }
-  }, [bookId, books, isLoading]);
+  }, [fileId, books, isLoading]);
 
   // Fetch the actual file blob and create blob URL
   const fetchFileBlob = useCallback(

@@ -51,8 +51,10 @@ export default function Page() {
   useEffect(() => {
     if (!booksList) return;
 
+    let booksWithImageUrls: Book[] = [];
+
     const loadImages = async () => {
-      const booksWithImageUrls = await Promise.all(
+      booksWithImageUrls = await Promise.all(
         booksList.map(async (book) => {
           const uiBook: Book = {
             title: book.title,
@@ -86,7 +88,7 @@ export default function Page() {
 
     // Cleanup blob URLs on unmount
     return () => {
-      booksWithImages.forEach((book) => {
+      booksWithImageUrls.forEach((book) => {
         if (book.image?.startsWith("blob:")) {
           URL.revokeObjectURL(book.image);
         }

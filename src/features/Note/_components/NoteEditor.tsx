@@ -38,7 +38,6 @@ import { useDb } from "@/lib/dexie/db";
 import { deleteNote, upsertNote } from "@/lib/notes";
 import { invalidateNote, useNote } from "@/features/Note/hooks/useNote";
 import "@mdxeditor/editor/style.css";
-import "./theme.css";
 
 const AUTOSAVE_DEBOUNCE_MS = 1000;
 

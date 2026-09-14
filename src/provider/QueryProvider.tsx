@@ -1,7 +1,6 @@
 "use client"
 import {
   QueryClientProvider,
-  useQuery,
 } from '@tanstack/react-query'
 import { queryClient } from '@/lib/queryClient'
 

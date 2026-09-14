@@ -21,7 +21,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Upload,
   FileText,
-  Image,
+  Image as ImageIcon,
   Plus,
   X,
   Heart,
@@ -168,7 +168,6 @@ const FileDropDialog = ({
         file: finalData.file,
         syncScope: finalData.syncToCloud ? "cloud" : "local",
       });
-      console.log("Book data submitted:", finalData);
     } catch (error) {
       console.error("Book upload failed:", error);
     }
@@ -333,7 +332,7 @@ const FileDropDialog = ({
                       htmlFor="image-upload"
                       className="group flex items-center justify-center gap-3 w-full h-24 border-2 border-dashed border-border rounded-xl hover:border-ring hover:bg-accent/50 cursor-pointer transition-all duration-200"
                     >
-                      <Image className="w-5 h-5 text-muted-foreground group-hover:text-accent-foreground" />
+                      <ImageIcon className="w-5 h-5 text-muted-foreground group-hover:text-accent-foreground" />
                       <span className="text-sm text-muted-foreground group-hover:text-accent-foreground">
                         {formData.image
                           ? formData.image.name
@@ -451,7 +450,12 @@ const FileDropDialog = ({
                   onChange={(e) => setNewTag(e.target.value)}
                   placeholder="Add a tag..."
                   className="flex-1 border-border rounded-lg h-10 focus:border-ring focus:ring-ring/20 bg-background"
-                  onKeyPress={(e) => e.key === "Enter" && addTag()}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      addTag();
+                    }
+                  }}
                 />
                 <Button
                   onClick={addTag}

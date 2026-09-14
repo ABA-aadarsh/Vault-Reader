@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import Image from "next/image";
 import { PanelLeftClose, Search, Star, Trash2 } from "lucide-react";
 import { useSearchLauncher } from "@/features/Search/provider/SearchLauncherProvider";
@@ -18,6 +18,7 @@ import { useRouter } from "next/navigation";
 import { SyncStatusChip } from "@/features/sync/SyncStatusChip";
 import { SyncNowButton } from "@/features/sync/SyncNowButton";
 import { useBooks } from "@/features/Books/hooks/useBooks";
+import { useAuth } from "@/features/supabase/auth/components/RequireAuth";
 import type { Book } from "@/lib/domain";
 
 function SidebarBookList({ books, label }: { books: Book[]; label: string }) {
@@ -45,6 +46,7 @@ export function AppSidebar() {
   const { toggleSidebar } = useSidebar();
   const { onOpen: onSearchLauncherOpen } = useSearchLauncher();
   const router = useRouter();
+  const { user } = useAuth();
   const { data: books } = useBooks();
 
   const allBooks = books ?? [];
@@ -52,6 +54,18 @@ export function AppSidebar() {
     .sort((a, b) => b.updatedAt - a.updatedAt)
     .slice(0, 3);
   const allSorted = [...allBooks].sort((a, b) => a.title.localeCompare(b.title));
+
+  const displayName =
+    typeof user?.user_metadata?.name === "string" && user.user_metadata.name.trim()
+      ? user.user_metadata.name
+      : user?.email ?? "";
+  const username = displayName.split(/\s+/)[0] || "User";
+  const initials = displayName
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .slice(0, 2)
+    .join("") || "U";
 
   return (
     <Sidebar className="bg-card text-foreground border-r-muted" variant="sidebar">
@@ -130,11 +144,10 @@ export function AppSidebar() {
         </div>
         <div className="flex items-center gap-3">
           <Avatar className="w-9 h-9">
-            <AvatarImage src="/user.png" alt="User" />
-            <AvatarFallback>AA</AvatarFallback>
+            <AvatarFallback>{initials}</AvatarFallback>
           </Avatar>
           <div className="flex flex-col">
-            <span className="text-sm font-medium">Aadarsh</span>
+            <span className="text-sm font-medium">{username}</span>
             <span
               className="text-xs text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
               onClick={() => router.push("/dashboard/settings")}

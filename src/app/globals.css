@@ -167,13 +167,6 @@
 body {
     letter-spacing: var(--tracking-normal);
 }
-._contentEditable_sects_380{
-    @apply focus-visible:!outline-none;
-}
-.mdxeditor-toolbar{
-    @apply !m-0 !p-0 text-card-foreground bg-card;
-}
-
 
 @keyframes ripple {
     0% {

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { Navbar } from "../components/shared/Navbar";
 import { buttonVariants } from "@/components/ui/button";
 
@@ -29,8 +30,14 @@ export default function Home() {
       {/* Preview / Screenshot */}
       <section className="px-6 mt-8 flex justify-center">
         <div className="w-full max-w-5xl rounded-lg overflow-hidden bg-card shadow-md border border-border">
-          <div className="aspect-video flex items-center justify-center text-muted-foreground text-sm sm:text-base bg-muted/30">
-            App Preview Placeholder
+          <div className="relative aspect-video w-full">
+            <Image
+              src="/placeholder.jpeg"
+              alt="Vault Reader app preview"
+              className="object-cover"
+              fill
+              sizes="(max-width: 1024px) 100vw, 1024px"
+            />
           </div>
         </div>
       </section>

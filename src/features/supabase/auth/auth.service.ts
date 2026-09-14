@@ -1,5 +1,5 @@
 import { supabase } from '../index'
-import type { User, Session } from '@supabase/supabase-js'
+import type { User } from '@supabase/supabase-js'
 
 const SESSION_KEY = 'vault-user-session'
 const USER_KEY = 'vault-user'
@@ -68,7 +68,7 @@ async function signout(): Promise<void> {
   if (isOnline()) {
     try {
       await supabase.auth.signOut()
-    } catch (_) {
+    } catch {
       // silent fail
     }
   }
@@ -83,7 +83,7 @@ async function getCurrentUser(): Promise<User | null> {
 
       cacheUser(data.user)
       return data.user
-    } catch (_) {
+    } catch {
       return getLocalUser()
     }
   } else if (isLoggedInOffline()) {

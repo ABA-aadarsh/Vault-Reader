@@ -6,6 +6,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import AuthAPI from '@/features/supabase/auth/auth.service';
 
 // 1. Zod Schema
@@ -36,15 +37,13 @@ export default function SignUpPage() {
   });
 
   const onSubmit = async (data: SignUpFormData) => {
-    console.log("Signup data:", data);
-    // Send to backend or API here
-     try {
-    const fullName = `${data.firstName} ${data.lastName}`;
-    await AuthAPI.signup(data.email, data.password, fullName);
-    router.push('/dashboard');
-  } catch (err: unknown) {
-    alert(err instanceof Error ? err.message : 'Sign up failed');
-  }
+    try {
+      const fullName = `${data.firstName} ${data.lastName}`;
+      await AuthAPI.signup(data.email, data.password, fullName);
+      router.push('/dashboard');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Sign up failed');
+    }
   };
 
   return (

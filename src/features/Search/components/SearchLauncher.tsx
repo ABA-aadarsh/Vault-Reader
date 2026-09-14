@@ -2,9 +2,9 @@
 
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
-import { Search, File, Star, ArrowRight } from "lucide-react";
+import { Search, File, ArrowRight } from "lucide-react";
 import { useSearchLauncher } from "../provider/SearchLauncherProvider";
 import OpenBookLibraryAPI from "@/features/BookSearch/functions";
 
@@ -12,12 +12,10 @@ export function SearchLauncher() {
   const { open: isSearchLauncherOpen, onClose: closeSearchLauncher, onOpen: openSearchLauncher } = useSearchLauncher();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<{
-    key: string;
+    title: string;
     link: string;
-    isFavorite?: boolean;
     author: string;
     image?: string;
-    description?: string;
   }[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -40,7 +38,14 @@ export function SearchLauncher() {
     setSelectedIndex(0);
   }, [isSearchLauncherOpen]);
 
-  const searchLauncherKeyboardListener = (e: KeyboardEvent) => {
+  const handleSelect = useCallback((item: { link?: string }) => {
+    if (item.link) {
+      window.open(item.link, "_blank", "noopener,noreferrer");
+      closeSearchLauncher();
+    }
+  }, [closeSearchLauncher]);
+
+  const searchLauncherKeyboardListener = useCallback((e: KeyboardEvent) => {
     if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
       if (launcherOpenRef.current) {
@@ -71,22 +76,13 @@ export function SearchLauncher() {
           break;
       }
     }
-  }
-
-
-
-  const handleSelect = (item: { link?: string }) => {
-    if (item.link) {
-      window.open(item.link, "_blank", "noopener,noreferrer");
-      closeSearchLauncher();
-    }
-  };
+  }, [results, selectedIndex, closeSearchLauncher, openSearchLauncher, handleSelect]);
 
   // Global keyboard shortcut handler (always active)
   useEffect(() => {
     window.addEventListener("keydown", searchLauncherKeyboardListener);
     return () => window.removeEventListener("keydown", searchLauncherKeyboardListener);
-  }, []);
+  }, [searchLauncherKeyboardListener]);
 
   useEffect(() => {
     const updateOnlineStatus = () => setIsOnline(navigator.onLine);
@@ -114,12 +110,10 @@ export function SearchLauncher() {
         const data = await OpenBookLibraryAPI.search(query);
         setResults(
           data.map((item) => ({
-            key: item.key,
+            title: item.title,
             link: `https://openlibrary.org${item.key}`,
-            isFavorite: false,
             author: item.author,
             image: item.image,
-            description: item.description,
           }))
         );
       } catch (err) {
@@ -198,7 +192,7 @@ export function SearchLauncher() {
               </h4>
               <ul className="pb-2">
                 {results.map((item, index) => (
-                  <li key={item.key + index}>
+                  <li key={item.title + index}>
                     <button
                       className={cn(
                         "w-full text-left px-6 py-3 flex items-center gap-4 transition-all duration-150 group relative",
@@ -211,24 +205,28 @@ export function SearchLauncher() {
                     >
                       <div
                         className={cn(
-                          "w-8 h-8 rounded-md flex items-center justify-center transition-colors",
+                          "w-9 h-12 rounded-sm overflow-hidden flex-shrink-0 flex items-center justify-center transition-colors bg-muted/50",
                           selectedIndex === index
                             ? "bg-accent-foreground/10"
-                            : "bg-muted/50 group-hover:bg-accent-foreground/10"
+                            : "group-hover:bg-accent-foreground/10"
                         )}
                       >
-                        <File className="w-4 h-4" />
+                        {item.image ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={item.image}
+                            alt=""
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <File className="w-4 h-4" />
+                        )}
                       </div>
 
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-sm truncate">
-                            {item.key}
-                          </span>
-                          {item.isFavorite && (
-                            <Star className="w-3.5 h-3.5 text-amber-500 fill-current flex-shrink-0" />
-                          )}
-                        </div>
+                        <span className="font-medium text-sm truncate block">
+                          {item.title}
+                        </span>
                         <p className="text-xs text-muted-foreground mt-0.5 truncate">
                           {item.author}
                         </p>

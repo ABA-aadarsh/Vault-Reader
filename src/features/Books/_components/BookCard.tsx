@@ -23,8 +23,6 @@ export type Book = {
   tags: string[];
   fileId: string;
   docId: string;
-  fileUrl?: string;
-  version?: string;
   isFavourite?: boolean;
   note?: string;
   image?: string | null;
@@ -39,7 +37,6 @@ type BookCardProps = {
   type?: "grid" | "list";
   versionStatus?: VersionStatus;
   failedOp?: OutboxEntry;
-  onDeleted?: () => void;
   onEdit?: (book: Book) => void;
   onDelete?: (book: Book) => void;
   onPromote?: (book: Book) => void;
@@ -123,7 +120,6 @@ export const BookCard = ({
   type = "grid",
   versionStatus = "consistent",
   failedOp,
-  onDeleted,
   onEdit,
   onDelete,
   onPromote,
@@ -159,7 +155,7 @@ export const BookCard = ({
     }
   };
 
-  const fallbackImage = "/placeholder.png";
+  const fallbackImage = "/placeholder.jpeg";
 
   if (type === "grid") {
     return (

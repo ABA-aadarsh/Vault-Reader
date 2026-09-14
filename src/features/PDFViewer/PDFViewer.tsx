@@ -51,9 +51,7 @@ export const PDFViewer = forwardRef<PDFViewerHandle, PDFViewerProps>(({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fitToWidth, setFitToWidth] = useState(false);
   const [pageHeight, setPageHeight] = useState(850);
-  const [pageWidth, setPageWidth] = useState(600);
   const [isZooming, setIsZooming] = useState(false);
-  const firstPageRef = useRef<HTMLDivElement>(null);
   const [virtualizerKey, setVirtualizerKey] = useState(0);
 
   // Debounce timer for scale updates
@@ -86,7 +84,6 @@ export const PDFViewer = forwardRef<PDFViewerHandle, PDFViewerProps>(({
   const onFirstPageLoadSuccess = (page: { getViewport: (opts: { scale: number }) => { width: number; height: number } }) => {
     const viewport = page.getViewport({ scale: 1 });
     setPageHeight(viewport.height);
-    setPageWidth(viewport.width);
   };
 
   // Smooth scale update function with CSS transform approach
@@ -230,7 +227,7 @@ export const PDFViewer = forwardRef<PDFViewerHandle, PDFViewerProps>(({
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [virtualizerKey]);
+  }, [virtualizerKey, rowVirtualizer]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -264,10 +261,10 @@ export const PDFViewer = forwardRef<PDFViewerHandle, PDFViewerProps>(({
                 width={50}
                 height={50}
                 className="object-contain invert"
-                src={"/dragon-logo.png"}
+                src={"/logo.png"}
                 alt="V"
               />
-              <span className="hidden sm:inline">Dragon PDF Viewer</span>
+              <span className="hidden sm:inline">Vault Reader</span>
             </div>
             {numPages > 0 && (
               <div className="flex items-center space-x-2">
@@ -428,7 +425,6 @@ export const PDFViewer = forwardRef<PDFViewerHandle, PDFViewerProps>(({
                       }}>
                         <div
                           className="bg-card shadow-sm border border-accent"
-                          ref={pageNumber === 1 ? firstPageRef : undefined}
                         >
                           <Page
                             pageNumber={pageNumber}
