@@ -43,12 +43,17 @@ import "./theme.css";
 const AUTOSAVE_DEBOUNCE_MS = 1000;
 
 function PageButton({ page }: { page: string }) {
+  const handleClick = () => {
+    const pageNum = Number.parseInt(String(page), 10);
+    if (Number.isNaN(pageNum) || pageNum <= 0) return;
+    window.dispatchEvent(
+      new CustomEvent("jump-to-page", { detail: { page: pageNum } })
+    );
+  };
   return (
     <button
       className="inline-flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-primary bg-accent/50 border border-border rounded-md hover:bg-accent hover:border-primary/50 transition-colors duration-150 cursor-pointer"
-      onClick={() => {
-        console.log(`Navigate to page ${page}`);
-      }}
+      onClick={handleClick}
     >
       <FileText className="w-3 h-3" />
       Page {page}

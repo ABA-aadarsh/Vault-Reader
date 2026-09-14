@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
@@ -31,12 +31,15 @@ interface PDFViewerProps {
   onPageChange?: (currentPage: number, totalPages: number) => void;
 }
 
-export const PDFViewer = ({
+export interface PDFViewerHandle {
+  jumpToPage: (pageNum: number) => void;
+}
+
+export const PDFViewer = forwardRef<PDFViewerHandle, PDFViewerProps>(({
   fileUrl,
-  // fileUrl = "https://blvebkbikgpulnererdb.supabase.co/storage/v1/object/public/books/9bb4d83a-d9c1-4ecd-873c-c16e7b4a7d68.pdf",
   className = "",
   onPageChange
-}: PDFViewerProps) => {
+}, ref) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [numPages, setNumPages] = useState<number>(0);
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -162,6 +165,10 @@ export const PDFViewer = ({
       setCurrentPage(pageNum);
     }
   };
+
+  useImperativeHandle(ref, () => ({
+    jumpToPage: goToPage,
+  }));
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -449,4 +456,6 @@ export const PDFViewer = ({
       </div>
     </div>
   );
-};
+});
+
+PDFViewer.displayName = "PDFViewer";

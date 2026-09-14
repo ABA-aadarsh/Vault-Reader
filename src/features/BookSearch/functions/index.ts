@@ -1,6 +1,6 @@
 const OpenBookLibraryAPI = {
   async search(query: string): Promise<
-    { title: string; image: string; author: string; description: string }[]
+    { key: string; title: string; image: string; author: string; description: string }[]
   > {
     if(query=="") return [];
     try {
@@ -14,11 +14,13 @@ const OpenBookLibraryAPI = {
       const data = await res.json();
 
       return (data.docs || []).slice(0, 20).map((book: {
+        key?: string;
         title?: string;
         author_name?: string[];
         cover_i?: number;
         first_sentence?: string[];
       }) => {
+        const key = book.key || "";
         const title = book.title || "Untitled";
         const author = book.author_name?.[0] || "Unknown Author";
 
@@ -29,6 +31,7 @@ const OpenBookLibraryAPI = {
         const description = book.first_sentence?.[0] || "No description available.";
 
         return {
+          key,
           title,
           author,
           image,

@@ -5,12 +5,7 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -22,19 +17,42 @@ import { useSearchLauncher } from "@/features/Search/provider/SearchLauncherProv
 import { useRouter } from "next/navigation";
 import { SyncStatusChip } from "@/features/sync/SyncStatusChip";
 import { SyncNowButton } from "@/features/sync/SyncNowButton";
+import { useBooks } from "@/features/Books/hooks/useBooks";
+import type { Book } from "@/lib/domain";
 
-const mockPdfs = [
-  { id: "1", title: "Compiler Design.pdf", isFavorite: true },
-  { id: "2", title: "Introduction to AI.pdf", isFavorite: false },
-  { id: "3", title: "Computer Networks.pdf", isFavorite: true },
-  { id: "4", title: "Microprocessors.pdf", isFavorite: false },
-  { id: "5", title: "Data Mining.pdf", isFavorite: false },
-];
+function SidebarBookList({ books, label }: { books: Book[]; label: string }) {
+  const router = useRouter();
+  return (
+    <SidebarGroup>
+      <h3 className="text-sm font-medium text-muted-foreground mb-2">{label}</h3>
+      <ul className="space-y-1 text-sm">
+        {books.map((book) => (
+          <li
+            key={book.id}
+            className="hover:bg-muted px-2 py-1 rounded flex justify-between items-center cursor-pointer"
+            onClick={() => router.push(`/dashboard/book/${book.fileId}`)}
+          >
+            <span className="truncate">{book.title}</span>
+            {book.isFavourite && <Star size={14} className="text-yellow-400 flex-shrink-0" />}
+          </li>
+        ))}
+      </ul>
+    </SidebarGroup>
+  );
+}
 
 export function AppSidebar() {
-  const { toggleSidebar } = useSidebar()
-  const { onOpen: onSearchLauncherOpen } = useSearchLauncher()
-  const router = useRouter()
+  const { toggleSidebar } = useSidebar();
+  const { onOpen: onSearchLauncherOpen } = useSearchLauncher();
+  const router = useRouter();
+  const { data: books } = useBooks();
+
+  const allBooks = books ?? [];
+  const recentBooks = [...allBooks]
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .slice(0, 3);
+  const allSorted = [...allBooks].sort((a, b) => a.title.localeCompare(b.title));
+
   return (
     <Sidebar className="bg-card text-foreground border-r-muted" variant="sidebar">
       <SidebarHeader className="flex items-center flex-row justify-between px-4 py-3 border-b border-border ">
@@ -83,37 +101,11 @@ export function AppSidebar() {
         </div>
 
         <ScrollArea className="space-y-6">
-          {/* Recent Group */}
-          <SidebarGroup>
-            <h3 className="text-sm font-medium text-muted-foreground mb-2">Recent</h3>
-            <ul className="space-y-1 text-sm">
-              {mockPdfs.slice(0, 3).map((pdf) => (
-                <li
-                  key={pdf.id}
-                  className="hover:bg-muted px-2 py-1 rounded flex justify-between items-center"
-                >
-                  {pdf.title}
-                  {pdf.isFavorite && <Star size={14} className="text-yellow-400" />}
-                </li>
-              ))}
-            </ul>
-          </SidebarGroup>
+          {allBooks.length > 0 && (
+            <SidebarBookList books={recentBooks} label="Recent" />
+          )}
 
-          {/* All PDFs Group */}
-          <SidebarGroup>
-            <h3 className="text-sm font-medium text-muted-foreground mb-2">All PDFs</h3>
-            <ul className="space-y-1 text-sm">
-              {mockPdfs.map((pdf) => (
-                <li
-                  key={pdf.id}
-                  className="hover:bg-muted px-2 py-1 rounded flex justify-between items-center"
-                >
-                  {pdf.title}
-                  {pdf.isFavorite && <Star size={14} className="text-yellow-400" />}
-                </li>
-              ))}
-            </ul>
-          </SidebarGroup>
+          <SidebarBookList books={allSorted} label="All Books" />
 
           {/* Manage Group */}
           <SidebarGroup>

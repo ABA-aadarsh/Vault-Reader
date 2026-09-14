@@ -1,19 +1,24 @@
 # Vault Reader — Codebase Review
 
+> Snapshot reviewed Sep 2026 — reflects current state after sync Phases 0–11.
+
 ## Project Overview
 
-Vault Reader is a **cross-platform, offline-first e-book reader** built with **Next.js 15 + React 19 + TypeScript**. It allows users to manage a personal library of PDF books with cloud sync via Supabase, a rich note-taking system, and a built-in PDF viewer.
+Vault Reader is a **cross-platform, offline-first e-book reader** built with **Next.js 15 + React 19 + TypeScript**. Users manage a personal library of PDF books with a **cloud-coordinated multi-master sync system** (Supabase = merge hub), a rich MDX note system, and a built-in virtualized PDF viewer.
+
 
 ---
 
 ## Core Features (Working)
 
-1. **Authentication** — Supabase email/password auth with `RequireAuth` route guard
-2. **Book Library** — Upload, grid/list view, drag-and-drop, delete with confirmation
-3. **PDF Viewer** — Virtualized rendering, zoom, rotate, fullscreen, page navigation
-4. **Note-Taking** — MDX WYSIWYG editor with custom page buttons and quote directives
-5. **Offline-First Sync** — Dexie (IndexedDB) local storage + queue-based Supabase cloud sync
-6. **Search** — Command palette (Ctrl+K) querying Open Library API
+1. **Authentication** — Supabase email/password with `RequireAuth` route guard, offline session caching, and `SessionExpiryBanner` re-auth prompt
+2. **Book Library** — Add (upload/drag-drop), grid/list view, edit, promote local→cloud, remove download, soft delete + 30-day restore (Recently deleted)
+3. **PDF Viewer** — Virtualized rendering, zoom, rotate, fullscreen, page navigation, lazy cloud download on open
+4. **Note-Taking** — MDX editor (autosave) with page-reference buttons and quote directives
+5. **Offline-First Sync** — Single `SyncEngine` orchestration: coalesced outbox → CAS push → cursor pull → file planner
+6. **Conflict Handling** — Policy-based auto-merge + conflict inbox (field clash, note body, update-vs-delete resolvers)
+7. **Progress Sync** — Optional global reading-progress sync (off by default, monotonic max merge)
+8. **Search** — Command palette (Ctrl+K) querying Open Library API
 
 ---
 
@@ -22,12 +27,13 @@ Vault Reader is a **cross-platform, offline-first e-book reader** built with **N
 | Layer | Technology |
 |-------|-----------|
 | Framework | Next.js 15 (App Router, Turbopack) |
-| UI | React 19, Tailwind CSS v4, shadcn/ui (New York style) |
-| State | TanStack React Query v5, React Context |
-| Local Storage | Dexie.js v4 (IndexedDB) |
-| Cloud | Supabase (Auth, Database, Storage) |
+| UI | React 19, Tailwind CSS v4, shadcn/ui (New York, stone) |
+| State | TanStack React Query v5, React Context, `useSyncExternalStore` (sync status) |
+| Local Storage | Dexie.js v4 (IndexedDB, per-user DB `bookVaultDB:${userId}`) |
+| Cloud | Supabase (Auth, Postgres, Storage) |
 | PDF | react-pdf v10 + @tanstack/react-virtual |
-| Notes | @mdxeditor/editor v3.40 |
+| Notes | @mdxeditor/editor |
+| Tests | Vitest + fake-indexeddb |
 | Forms | react-hook-form v7 + Zod v4 |
 
 ---
@@ -38,12 +44,13 @@ Vault Reader is a **cross-platform, offline-first e-book reader** built with **N
 
 ```
 features/
-├── supabase/          # Backend integration (auth, books, sync services)
+├── supabase/          # Auth (RequireAuth, auth.service) + storage
+├── sync/              # SyncEngine, push/pull/filePlanner/policy/conflicts
+├── sync/resolvers/    # FieldClash, NoteBody, UpdateVsDelete resolvers
 ├── Books/             # Book management UI, hooks, providers
 ├── PDFViewer/         # PDF rendering with virtualization
 ├── Note/              # Rich MDX note editor
-├── PDFAndNoteViewer/  # Split view (broken/in-progress)
-├── Search/            # Command palette search
+├── Search/            # Command palette (Ctrl+K)
 └── BookSearch/        # Open Library API client
 ```
 
@@ -51,69 +58,77 @@ features/
 
 ```
 Root Layout → QueryProvider
-  └─ Dashboard Layout → RequireAuth → SearchLauncherProvider → BookAddProvider → SidebarProvider
+  └─ Dashboard Layout → RequireAuth → UserDbProvider → SearchLauncherProvider → BookAddProvider → SidebarProvider
 ```
 
-### Service Layer
+### Service / Data Layer (`src/lib/`)
 
-- `AuthAPI` — signup, signin, signout, getCurrentUser, localStorage caching
-- `BooksAPI` — upload, list, get, delete, update, download
-- `SyncManager` — queue-based offline sync with push/pull to Supabase
+- **Dexie layer** — `dexie/db.tsx` (per-user factory + `UserDbProvider`), `dexie/schema.ts`, `dexie/types.ts`
+- **Local repos (standalone functions)** — `books.ts`, `notes.ts`, `readingState.ts`, `files.ts`, `images.ts`, `settings.ts`
+- **Sync plumbing** — `outbox.ts` (coalescing enqueue), plus `features/sync/*` (engine, push, pull, policy, conflicts, filePlanner)
+- **Domain** — `domain.ts` (Book / Note / ReadingState) + `mappers.ts`
 
-### Database Schema (Dexie/IndexedDB)
+### Sync subsystem (`src/features/sync/`)
 
-| Table | Primary Key | Purpose |
-|-------|------------|---------|
-| `files` | `++id` | Stores book file blobs |
-| `metadata` | `docId` | Book metadata (title, author, tags, sync status) |
-| `image` | `++id` | Stores cover image blobs |
-| `syncQueue` | `++id` | Queued create/update/delete operations |
+| Module | Responsibility |
+|--------|---------------|
+| `SyncEngine.ts` | `runCycle` (push → pull → file planner) with mutex, triggers, scheduling, status store |
+| `push.ts` | Outbox draining, CAS RPCs, error classification, exponential backoff |
+| `pull.ts` | Cursor-based book/note pull + snapshot/tombstone apply |
+| `filePlanner.ts` | Eager cover download, lazy PDF download |
+| `policy.ts` | `attemptAutoMerge` (field merge, tags set-union, LWW favourite) |
+| `conflicts.ts` | Conflict CRUD + resolve/restore/confirm-delete |
+| `SyncStatusChip` / `SyncNowButton` / `SessionExpiryBanner` | UI surfaces |
+
+### Cloud schema (Supabase)
+
+- `books`, `notes`, `reading_states` tables + RLS + cursor indexes
+- CAS RPCs: `cas_upsert_book`, `cas_upsert_note` (SECURITY DEFINER)
+- Storage buckets `books` + `image`; path prefix `{userId}/{bookId}/...`
+- Migrations: `0001_sync_v1.sql`, `0002_wipe_old_data.sql`, `0003_restore_clears_deleted_at.sql`
 
 ---
 
 ## Partially Done / Stubbed
 
-- **PDFAndNoteViewer** — split view component is broken (empty provider, missing props)
-- **Settings page** — Profile works, but Notifications/Security/Appearance are UI-only
-- **Sidebar** — uses hardcoded mock data instead of real books
-- **Service Worker** — implemented but disabled (was caching API calls)
-- **Appwrite SDK** — installed but never used (planned alternative backend)
+- **Search palette** — results open the Open Library book page in a new tab; no local-book search yet
+- **Theme switching** — selector in settings works (persisted to localStorage); landing page stays dark by default
+- **Service Worker** — implemented (`public/sw.js`) but deliberately **disabled** (it was caching API responses)
+- **Note page buttons** — navigate the PDF viewer to the referenced page; editor-only insert, no editing existing buttons
 
 ---
 
-## Missing
+## Known Gaps / Open Items
 
-- **No tests** — no test files, no testing libraries, no test scripts
-- **No CI/CD** pipeline
-- **Search results** don't link anywhere yet
-- **Theme switching** UI exists but isn't wired up
-- **No API/architecture documentation**
+- **Server tombstone GC** (plan Phase 8.5) — client-side 30-day purge only
+- **No CI/CD pipeline**
+- **No API/architecture docs** beyond `plan.md`
+- **Secrets hygiene** — `.env` with live Supabase credentials is committed to the repo; should be rotated/removed
+- **Phase 12 roadmap** — CRDT notes, Supabase Realtime wake-up, Replace PDF, per-book progress, E2E encryption, guest→account migration
 
----
+## Notable Issues (historical, now resolved)
 
-## Notable Issues
-
-1. `.env` with Supabase credentials may be committed despite `.gitignore`
-2. `ignoreBuildErrors: true` in `next.config.ts` — build errors are silently ignored
-3. `deleteBook` has an incomplete local auth TODO
-4. Duplicate search effect in `SearchLauncher.tsx`
-5. `downloadBook` has a logic bug (inverted image existence check)
-6. Some unused imports in source files
+1. ~~`ignoreBuildErrors: true`~~ — now `false`; `tsc --noEmit` is clean.
+2. ~~No test runner~~ — Vitest + fake-indexeddb; 7 suites passing (~59 tests).
+3. ~~Appwrite SDK~~ — uninstalled.
+4. ~~`PDFAndNoteViewer` split view~~ — deleted.
+5. ~~Old `syncManager.ts` / `book.service.ts`~~ — deleted; replaced by `SyncEngine` + local repos.
+6. ~~`deleteBook` local auth TODO~~ — no longer present.
 
 ---
 
 ## Application Flow
 
-1. User visits `/` — sees landing page with hero and feature descriptions
-2. User signs up/in at `/signup` or `/signin` — form validated with Zod, auth via Supabase
-3. Redirected to `/dashboard` — protected by `RequireAuth`; sidebar loads
-4. Dashboard shows library — books loaded from local Dexie DB, images as blob URLs
-5. User adds a book — via "Add Book" button or drag-and-drop; stored locally; queued for sync
-6. If online — sync manager uploads file/image to Supabase Storage, inserts metadata into DB
-7. User clicks a book card — navigates to `/dashboard/book/[bookId]`; PDFViewer renders
-8. PDF Viewer — virtualized scrolling, zoom, rotate, fullscreen, download, page navigation
-9. Note editor — available via MDXEditor with rich formatting and custom JSX components
-10. Search — Ctrl+K opens command palette; queries Open Library API with debounce
+1. User visits `/` — landing page with hero, features section, and footer
+2. User signs up/in at `/signup` or `/signin` — Zod-validated forms, Supabase auth
+3. Redirected to `/dashboard` — protected by `RequireAuth`; sidebar loads real library data
+4. Dashboard shows library — books loaded from per-user Dexie DB, covers as blob URLs
+5. User adds a book — stored locally; promoted to cloud (default) or kept local-only
+6. Sync engine — coalesced outbox → CAS push → cursor pull → eager covers / lazy PDFs; conflicts surface in the inbox
+7. Reader at `/dashboard/book/[bookId]` — downloads missing cloud PDFs on open; `PDFViewer` renders
+8. Note editor — MDX with autosave; page-reference buttons jump the viewer
+9. Progress sync (optional) — max(page)/max(percent) merge
+10. Search (Ctrl+K) — Open Library lookup with debounce; results open in a new tab
 
 ---
 
@@ -126,4 +141,4 @@ Root Layout → QueryProvider
 
 ---
 
-*Review generated for Vault Reader project at `E:\codes\Vault-Reader`*
+*Review snapshot generated for Vault Reader at `E:\codes\Vault-Reader` — Sep 2026.*

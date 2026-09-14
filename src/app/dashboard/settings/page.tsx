@@ -15,6 +15,7 @@ import {
   setProgressSyncEnabled,
 } from "@/lib/settings";
 import { useSyncStatus } from "@/features/sync/useSyncStatus";
+import { getTheme, setTheme, type Theme } from "@/lib/theme";
 
 interface Tab {
   id: string;
@@ -24,13 +25,23 @@ interface Tab {
 
 const SettingsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<string>("sync");
-  const [selectedTheme, setSelectedTheme] = useState("system");
+  const [selectedTheme, setSelectedTheme] = useState<Theme>("system");
   const [progressSync, setProgressSync] = useState(false);
   const [loadingProgressSync, setLoadingProgressSync] = useState(true);
   const { user } = useAuth();
   const db = useDb();
   const router = useRouter();
   const { status, pendingCount, conflictCount } = useSyncStatus();
+
+  // Load persisted theme
+  useEffect(() => {
+    setSelectedTheme(getTheme());
+  }, []);
+
+  const handleThemeSelect = (theme: Theme) => {
+    setSelectedTheme(theme);
+    setTheme(theme);
+  };
 
   // Load progress sync setting from DB
   useEffect(() => {
@@ -237,7 +248,7 @@ const SettingsPage: React.FC = () => {
                           className={`h-auto p-4 flex-col gap-2 cursor-pointer ${
                             selectedTheme !== theme.id ? "border-card-foreground/10" : ""
                           }`}
-                          onClick={() => setSelectedTheme(theme.id)}
+                          onClick={() => handleThemeSelect(theme.id as Theme)}
                         >
                           <div className="w-full aspect-video bg-muted border border-card-foreground/10 rounded-sm" />
                           <div className="text-center">

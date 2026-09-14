@@ -1,7 +1,7 @@
 "use client";
 
 import { NoteEditor } from "@/features/Note/_components/NoteEditor";
-import { PDFViewer } from "@/features/PDFViewer/PDFViewer";
+import { PDFViewer, type PDFViewerHandle } from "@/features/PDFViewer/PDFViewer";
 import { useBooks } from "@/features/Books/hooks/useBooks";
 import { useState, useEffect, useCallback, useRef } from "react";
 import React from "react";
@@ -33,7 +33,20 @@ export default function BookViewPage({ params }: PageProps) {
   const router = useRouter();
   const blobUrlRef = useRef<string | null>(null);
   const selectedBookRef = useRef<Book | null>(null);
+  const viewerRef = useRef<PDFViewerHandle>(null);
   selectedBookRef.current = selectedBook;
+
+  // Listen for page jumps (e.g. PageButton clicks in the note editor)
+  useEffect(() => {
+    const handleJumpToPage = (e: Event) => {
+      const page = (e as CustomEvent<{ page: number }>).detail?.page;
+      if (typeof page === "number") {
+        viewerRef.current?.jumpToPage(page);
+      }
+    };
+    window.addEventListener("jump-to-page", handleJumpToPage);
+    return () => window.removeEventListener("jump-to-page", handleJumpToPage);
+  }, []);
 
   // Find the book in the list
   useEffect(() => {
@@ -154,6 +167,7 @@ export default function BookViewPage({ params }: PageProps) {
 
       <div className="flex-1 min-w-0 relative">
         <PDFViewer
+          ref={viewerRef}
           fileUrl={fileUrl}
           className="w-full h-full"
           onPageChange={(page, totalPages) => {

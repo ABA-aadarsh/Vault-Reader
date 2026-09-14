@@ -3,7 +3,6 @@
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Search, File, Star, ArrowRight } from "lucide-react";
 import { useSearchLauncher } from "../provider/SearchLauncherProvider";
@@ -12,9 +11,15 @@ import OpenBookLibraryAPI from "@/features/BookSearch/functions";
 export function SearchLauncher() {
   const { open: isSearchLauncherOpen, onClose: closeSearchLauncher, onOpen: openSearchLauncher } = useSearchLauncher();
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<{ key: string, link: string, isFavorite?: boolean, author: string }[]>([]);
+  const [results, setResults] = useState<{
+    key: string;
+    link: string;
+    isFavorite?: boolean;
+    author: string;
+    image?: string;
+    description?: string;
+  }[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const launcherOpenRef = useRef<boolean>(false);
   const [isOnline, setIsOnline] = useState(true);
@@ -72,7 +77,7 @@ export function SearchLauncher() {
 
   const handleSelect = (item: { link?: string }) => {
     if (item.link) {
-      router.push(item.link);
+      window.open(item.link, "_blank", "noopener,noreferrer");
       closeSearchLauncher();
     }
   };
@@ -99,29 +104,6 @@ export function SearchLauncher() {
   useEffect(() => {
     if (!query.trim() || !isOnline) {
       setResults([]);
-      return;
-    }
-
-    const timeout = setTimeout(async () => {
-      const data = await OpenBookLibraryAPI.search(query);
-      setResults(
-        data.map((item, index) => ({
-          key: item.title,
-          link: "#", // Replace with actual link or open viewer
-          isFavorite: false,
-          author: item.author,
-          image: item.image,
-          description: item.description,
-        }))
-      );
-    }, 400); // debounce
-
-    return () => clearTimeout(timeout);
-  }, [query, isOnline]);
-
-  useEffect(() => {
-    if (!query.trim() || !isOnline) {
-      setResults([]);
       setLoading(false);
       return;
     }
@@ -131,9 +113,9 @@ export function SearchLauncher() {
       try {
         const data = await OpenBookLibraryAPI.search(query);
         setResults(
-          data.map((item, index) => ({
-            key: item.title,
-            link: "#",
+          data.map((item) => ({
+            key: item.key,
+            link: `https://openlibrary.org${item.key}`,
             isFavorite: false,
             author: item.author,
             image: item.image,
