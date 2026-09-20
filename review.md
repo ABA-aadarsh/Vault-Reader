@@ -100,10 +100,9 @@ Root Layout → QueryProvider
 
 ## Known Gaps / Open Items
 
-- **Server tombstone GC** (plan Phase 8.5) — client-side 30-day purge only
+- **Server tombstone GC** — solved in Phase 8.5 (`0004_tombstone_gc.sql`: pg_cron daily job + SECURITY DEFINER `purge_expired_tombstones()` removing rows > 30 days and their storage objects)
 - **No CI/CD pipeline**
 - **No API/architecture docs** beyond `plan.md`
-- **Secrets hygiene** — `.env` with live Supabase credentials is committed to the repo; should be rotated/removed
 - **Phase 12 roadmap** — CRDT notes, Supabase Realtime wake-up, Replace PDF, per-book progress, E2E encryption, guest→account migration
 
 ## Notable Issues (historical, now resolved)

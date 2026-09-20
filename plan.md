@@ -84,7 +84,7 @@ Build a **cloud-coordinated multi-master**, offline-first sync system for a **si
 
 Most original gaps are resolved. Remaining gaps:
 
-- No server tombstone GC (deferred from Phase 8)
+- Server tombstone GC — implemented in Phase 8.5 (0004_tombstone_gc.sql + pg_cron)
 - Session expiry banner — implemented in Phase 9
 - Progress sync toggle — implemented in Phase 10
 - Test runner — implemented in Phase 11
@@ -672,13 +672,13 @@ While conflict open: pause sync **only for that entity**; rest continues.
 
 ---
 
-### Phase 8 — Promote, scope, delete UX *(completed — 8.5 deferred)*
+### Phase 8 — Promote, scope, delete UX *(completed)*
 
 8.1 Promote local→cloud flow + confirm *(done)*
 8.2 Block demote (no UI) *(done — no demote path exists)*
 8.3 Delete copy: "Delete from library (all devices)" vs "Remove download" *(done)*
 8.4 Recently deleted + restore (30d client purge) *(done — UI + restore + 30d client purge)*
-8.5 Server tombstone GC (SQL cron / edge) + storage orphan sweep *(deferred)*
+8.5 Server tombstone GC (SQL cron / edge) + storage orphan sweep *(done — `0004_tombstone_gc.sql`: pg_cron daily 03:00 UTC job, SECURITY DEFINER `purge_expired_tombstones()` hard-deletes books/notes/reading_states with `deleted_at` > 30 days and removes matching `books`/`image` storage objects via the `storage.allow_delete_query` GUC; immediate first sweep on deploy; client `purgeExpiredTombstones` kept as second layer)*
 
 **Decisions locked for Phase 8 (grilling session):**
 - Recently deleted: build restore UI (sidebar entry → Sheet), not silent tombstones
@@ -869,4 +869,4 @@ While conflict open: pause sync **only for that entity**; rest continues.
 
 ---
 
-*Plan approved from grilling session. Phases 0-11 are implemented. Remaining: server tombstone GC (Phase 8 deferred) and Phase 12 follow-on roadmap.*
+*Plan approved from grilling session. Phases 0-11 and 8.5 are implemented. Remaining: Phase 12 follow-on roadmap.*
