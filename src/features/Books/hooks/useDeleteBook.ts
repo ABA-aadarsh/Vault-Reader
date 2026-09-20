@@ -1,8 +1,8 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useDb } from "@/lib/dexie/db";
-import { softDeleteBook, hardPurgeLocal } from "@/lib/books";
+import { useDb } from "@/data/dexie";
+import { softDeleteBook, hardPurgeLocal } from "../data/books";
 
 export function useDeleteBook() {
   const db = useDb();
@@ -23,3 +23,4 @@ export function useDeleteBook() {
     },
   });
 }
+

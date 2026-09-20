@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { BookVaultDexie } from "@/lib/dexie/schema";
-import type { BookEntry } from "@/lib/dexie/types";
-import { restoreBook, softDeleteBook } from "@/lib/books";
+import { BookVaultDexie } from "@/data/dexie/schema";
+import type { Book } from "@/data/domain";
+import { restoreBook, softDeleteBook } from "@/features/Books/data/books";
 
 let db: BookVaultDexie;
 
@@ -17,7 +17,7 @@ afterEach(async () => {
   await db.delete();
 });
 
-function seedCloudBook(overrides: Partial<BookEntry> = {}) {
+function seedCloudBook(overrides: Partial<Book> = {}) {
   return db.books.add({
     id: "book-1",
     title: "Title",

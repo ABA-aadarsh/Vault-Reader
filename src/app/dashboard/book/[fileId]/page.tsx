@@ -1,18 +1,16 @@
 "use client";
 
-import { NoteEditor } from "@/features/Note/_components/NoteEditor";
-import { PDFViewer, type PDFViewerHandle } from "@/features/PDFViewer/PDFViewer";
-import { useBooks } from "@/features/Books/hooks/useBooks";
+import { NoteEditor } from "@/features/Notes";
+import { PDFViewer, type PDFViewerHandle, setPage } from "@/features/Reader";
+import { useBooks, getFileBlob } from "@/features/Books";
 import { useState, useEffect, useCallback, useRef } from "react";
 import React from "react";
 import { Loader2, FileWarning, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useDb } from "@/lib/dexie/db";
-import { getFileBlob } from "@/lib/files";
-import { downloadPdf } from "@/features/Sync/filePlanner";
-import { setPage } from "@/lib/readingState";
-import type { Book } from "@/lib/domain";
-import { useAuth } from "@/features/Supabase/auth/components/RequireAuth";
+import { useDb } from "@/data/dexie";
+import { downloadPdf } from "@/features/Sync";
+import type { Book } from "@/data/domain";
+import { useAuth } from "@/features/Auth";
 import { useRouter } from "next/navigation";
 
 interface PageProps {
@@ -182,3 +180,4 @@ export default function BookViewPage({ params }: PageProps) {
     </div>
   );
 }
+

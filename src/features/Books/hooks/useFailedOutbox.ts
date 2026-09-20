@@ -1,10 +1,9 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useDb } from "@/lib/dexie/db";
-import { getFailedOutbox, retryOutboxEntry, discardOutboxEntry } from "@/lib/outbox";
-import { engine } from "@/features/Sync/SyncEngine";
-import type { OutboxEntry } from "@/lib/dexie/types";
+import { useDb } from "@/data/dexie";
+import { getFailedOutbox, retryOutboxEntry, discardOutboxEntry, engine } from "@/features/Sync";
+import type { OutboxEntry } from "@/data/dexie";
 
 export function useFailedOutbox() {
   const db = useDb();

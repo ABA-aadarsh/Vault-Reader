@@ -2,17 +2,14 @@
 
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "../../components/shared/SidebarContainer";
-import { SearchLauncherProvider } from "@/features/Search/provider/SearchLauncherProvider";
-import { SearchLauncher } from "@/features/Search/components/SearchLauncher";
+import { SearchLauncherProvider, SearchLauncher } from "@/features/Search";
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css'
 
-import {RequireAuth, useAuth} from "@/features/Supabase/auth/components/RequireAuth";
-import { BookAddProvider } from "@/features/Books/provider/BookDropAddProvider";
-import { UserDbProvider } from "@/lib/dexie/db";
-import { ConflictInbox } from "@/features/Sync/ConflictInbox";
-import { RecentlyDeletedSheet } from "@/features/Books/_components/RecentlyDeletedSheet";
-import { SessionExpiryBanner } from "@/features/Sync/SessionExpiryBanner";
+import { RequireAuth, useAuth, SessionExpiryBanner } from "@/features/Auth";
+import { BookAddProvider, RecentlyDeletedSheet } from "@/features/Books";
+import { UserDbProvider } from "@/data/dexie";
+import { ConflictInbox } from "@/features/Sync";
 
 function DashboardContent({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -50,3 +47,4 @@ export default function RootLayout({
     </RequireAuth>
   );
 }
+

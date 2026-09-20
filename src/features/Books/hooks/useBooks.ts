@@ -1,9 +1,9 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useDb } from "@/lib/dexie/db";
-import { listBooks, listCloudBooks } from "@/lib/books";
-import type { Book } from "@/lib/domain";
+import { useDb } from "@/data/dexie";
+import { listBooks, listCloudBooks } from "../data/books";
+import type { Book } from "@/data/domain";
 
 export function useBooks() {
   const db = useDb();
@@ -20,3 +20,4 @@ export function useCloudBooks() {
     queryFn: () => listCloudBooks(db),
   });
 }
+

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { BookVaultDexie } from "@/lib/dexie/schema";
-import type { BookEntry, NoteEntry } from "@/lib/dexie/types";
-import { upsertNote, deleteNote } from "@/lib/notes";
+import { BookVaultDexie } from "@/data/dexie/schema";
+import type { Book, Note } from "@/data/domain";
+import { upsertNote, deleteNote } from "@/features/Notes/data/notes";
 
 let db: BookVaultDexie;
 
@@ -18,7 +18,7 @@ afterEach(async () => {
   await db.delete();
 });
 
-function seedBook(overrides: Partial<BookEntry> = {}) {
+function seedBook(overrides: Partial<Book> = {}) {
   return db.books.add({
     id: "book-1",
     title: "Title",
@@ -40,7 +40,7 @@ function seedBook(overrides: Partial<BookEntry> = {}) {
   });
 }
 
-function seedNote(overrides: Partial<NoteEntry> = {}) {
+function seedNote(overrides: Partial<Note> = {}) {
   return db.notes.add({
     bookId: "book-1",
     body: "original",

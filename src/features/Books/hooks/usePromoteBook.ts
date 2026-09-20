@@ -1,8 +1,8 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useDb } from "@/lib/dexie/db";
-import { promoteToCloud } from "@/lib/books";
+import { useDb } from "@/data/dexie";
+import { promoteToCloud } from "../data/books";
 
 export function usePromoteBook() {
   const db = useDb();
@@ -17,3 +17,4 @@ export function usePromoteBook() {
     },
   });
 }
+

@@ -1,8 +1,8 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useDb } from "@/lib/dexie/db";
-import { createBook, type CreateBookParams } from "@/lib/books";
+import { useDb } from "@/data/dexie";
+import { createBook, type CreateBookParams } from "../data/books";
 
 export function useCreateBook() {
   const db = useDb();
@@ -16,3 +16,4 @@ export function useCreateBook() {
     },
   });
 }
+

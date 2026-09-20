@@ -1,22 +1,24 @@
 "use client";
 
-import { BookCard, type VersionStatus } from "@/features/Books/_components/BookCard";
-import { type BookViewModel, toBookViewModel } from "@/features/Books/types";
+import {
+  BookCard,
+  type VersionStatus,
+  type BookViewModel,
+  toBookViewModel,
+  useBooks,
+  AddBookButton,
+  getImageBlob,
+  EditBookDialog,
+  useDeleteBook,
+  usePromoteBook,
+  useRemoveDownload,
+  useFailedOutbox,
+} from "@/features/Books";
 import { useState, useEffect } from "react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { LayoutGrid, List } from "lucide-react";
-import { useBooks } from "@/features/Books/hooks/useBooks";
-import {
-  AddBookButton,
-} from "@/features/Books/provider/BookDropAddProvider";
-import { useDb } from "@/lib/dexie/db";
-import { getImageBlob } from "@/lib/images";
+import { useDb } from "@/data/dexie";
 import { ConfirmationDialog } from "@/components/shared/ConfirmationDialog";
-import { EditBookDialog } from "@/features/Books/_components/EditBookDialog";
-import { useDeleteBook } from "@/features/Books/hooks/useDeleteBook";
-import { usePromoteBook } from "@/features/Books/hooks/usePromoteBook";
-import { useRemoveDownload } from "@/features/Books/hooks/useRemoveDownload";
-import { useFailedOutbox } from "@/features/Books/hooks/useFailedOutbox";
 import { toast } from "sonner";
 
 function versionStatusFrom(syncStatus?: string): VersionStatus {
@@ -248,3 +250,4 @@ export default function Page() {
     </div>
   );
 }
+

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
-import { BookVaultDexie } from "@/lib/dexie/schema";
-import { pullBooks, pullNotes } from "@/features/Sync/pull";
+import { BookVaultDexie } from "@/data/dexie/schema";
+import { pullBooks, pullNotes } from "@/features/Sync/data/pull";
 
 function mockSupabaseQuery(rows: Record<string, unknown>[]) {
   const chain = {
@@ -15,7 +15,7 @@ function mockSupabaseQuery(rows: Record<string, unknown>[]) {
   return chain;
 }
 
-vi.mock("@/features/Supabase/index", () => ({
+vi.mock("@/lib/supabase", () => ({
   supabase: {
     from: vi.fn(),
   },
@@ -61,7 +61,7 @@ function cloudRow(overrides: Record<string, unknown> = {}) {
 
 describe("pull — book snapshot apply", () => {
   it("creates a new book locally when pulling from cloud", async () => {
-    const { supabase } = await import("@/features/Supabase/index");
+    const { supabase } = await import("@/lib/supabase");
     const row = cloudRow();
     (supabase.from as ReturnType<typeof vi.fn>).mockReturnValue(mockSupabaseQuery([row]));
 
@@ -97,7 +97,7 @@ describe("pull — book snapshot apply", () => {
       updatedByDeviceId: "",
     });
 
-    const { supabase } = await import("@/features/Supabase/index");
+    const { supabase } = await import("@/lib/supabase");
     const row = cloudRow({ title: "Updated Title", revision: 3 });
     (supabase.from as ReturnType<typeof vi.fn>).mockReturnValue(mockSupabaseQuery([row]));
 
@@ -121,7 +121,7 @@ describe("pull — book snapshot apply", () => {
       nextAttemptAt: Date.now(),
     });
 
-    const { supabase } = await import("@/features/Supabase/index");
+    const { supabase } = await import("@/lib/supabase");
     const row = cloudRow({ revision: 5 });
     (supabase.from as ReturnType<typeof vi.fn>).mockReturnValue(mockSupabaseQuery([row]));
 
@@ -151,7 +151,7 @@ describe("pull — book snapshot apply", () => {
       updatedByDeviceId: "",
     });
 
-    const { supabase } = await import("@/features/Supabase/index");
+    const { supabase } = await import("@/lib/supabase");
     const row = cloudRow({ revision: 3 });
     (supabase.from as ReturnType<typeof vi.fn>).mockReturnValue(mockSupabaseQuery([row]));
 
@@ -184,7 +184,7 @@ describe("pull — tombstone apply", () => {
       updatedByDeviceId: "",
     });
 
-    const { supabase } = await import("@/features/Supabase/index");
+    const { supabase } = await import("@/lib/supabase");
     const row = cloudRow({
       deleted_at: "2025-06-01T00:00:00Z",
       revision: 2,
@@ -199,7 +199,7 @@ describe("pull — tombstone apply", () => {
   });
 
   it("tombstone creates book locally if it did not exist before", async () => {
-    const { supabase } = await import("@/features/Supabase/index");
+    const { supabase } = await import("@/lib/supabase");
     const row = cloudRow({
       deleted_at: "2025-06-01T00:00:00Z",
       revision: 1,
@@ -235,7 +235,7 @@ describe("pull — tombstone apply", () => {
     await db.files.add({ fileId: "file-1", file: new Blob(["pdf"]) });
     await db.images.add({ imageId: "img-1", image: new Blob(["img"]) });
 
-    const { supabase } = await import("@/features/Supabase/index");
+    const { supabase } = await import("@/lib/supabase");
     const row = cloudRow({
       deleted_at: "2025-06-01T00:00:00Z",
       revision: 2,
@@ -273,7 +273,7 @@ describe("pull — note apply", () => {
       updatedByDeviceId: "",
     });
 
-    const { supabase } = await import("@/features/Supabase/index");
+    const { supabase } = await import("@/lib/supabase");
     const noteRow = {
       book_id: "book-1",
       user_id: "user-1",
@@ -294,7 +294,7 @@ describe("pull — note apply", () => {
   });
 
   it("skips note when book does not exist locally", async () => {
-    const { supabase } = await import("@/features/Supabase/index");
+    const { supabase } = await import("@/lib/supabase");
     const noteRow = {
       book_id: "missing-book",
       user_id: "user-1",
@@ -340,7 +340,7 @@ describe("pull — note apply", () => {
       updatedByDeviceId: "",
     });
 
-    const { supabase } = await import("@/features/Supabase/index");
+    const { supabase } = await import("@/lib/supabase");
     const noteRow = {
       book_id: "book-1",
       user_id: "user-1",
@@ -361,7 +361,7 @@ describe("pull — note apply", () => {
 
 describe("pull — cursor advancement", () => {
   it("stores cursor after processing rows", async () => {
-    const { supabase } = await import("@/features/Supabase/index");
+    const { supabase } = await import("@/lib/supabase");
     const row = cloudRow({ updated_at: "2025-03-01T00:00:00Z" });
     (supabase.from as ReturnType<typeof vi.fn>).mockReturnValue(mockSupabaseQuery([row]));
 
@@ -385,7 +385,7 @@ describe("pull — cursor advancement", () => {
       nextAttemptAt: Date.now(),
     });
 
-    const { supabase } = await import("@/features/Supabase/index");
+    const { supabase } = await import("@/lib/supabase");
     const row = cloudRow();
     (supabase.from as ReturnType<typeof vi.fn>).mockReturnValue(mockSupabaseQuery([row]));
 

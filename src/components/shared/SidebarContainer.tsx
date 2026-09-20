@@ -13,13 +13,12 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import Image from "next/image";
 import { PanelLeftClose, Search, Star, Trash2 } from "lucide-react";
-import { useSearchLauncher } from "@/features/Search/provider/SearchLauncherProvider";
+import { useSearchLauncher } from "@/features/Search";
 import { useRouter } from "next/navigation";
-import { SyncStatusChip } from "@/features/Sync/SyncStatusChip";
-import { SyncNowButton } from "@/features/Sync/SyncNowButton";
-import { useBooks } from "@/features/Books/hooks/useBooks";
-import { useAuth } from "@/features/Supabase/auth/components/RequireAuth";
-import type { Book } from "@/lib/domain";
+import { SyncStatusChip, SyncNowButton } from "@/features/Sync";
+import { useBooks } from "@/features/Books";
+import { useAuth } from "@/features/Auth";
+import type { Book } from "@/data/domain";
 
 function SidebarBookList({ books, label }: { books: Book[]; label: string }) {
   const router = useRouter();
@@ -160,3 +159,4 @@ export function AppSidebar() {
     </Sidebar>
   );
 }
+

@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { BookVaultDexie } from "@/lib/dexie/schema";
+import { BookVaultDexie } from "@/data/dexie/schema";
 
 let dbA: BookVaultDexie;
 let dbB: BookVaultDexie;

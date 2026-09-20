@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { BookVaultDexie } from "@/lib/dexie/schema";
-import { enqueue, getPendingCount } from "@/lib/outbox";
+import { BookVaultDexie } from "@/data/dexie/schema";
+import { enqueue, getPendingCount } from "@/features/Sync/data/outbox";
 
 let db: BookVaultDexie;
 

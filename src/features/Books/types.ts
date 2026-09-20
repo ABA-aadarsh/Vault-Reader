@@ -1,4 +1,4 @@
-import type { Book } from "@/lib/domain";
+import type { Book } from "@/data/domain";
 
 export interface BookViewModel {
   title: string;

@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { attemptAutoMerge } from "@/features/Sync/policy";
-import type { BookEntry } from "@/lib/dexie/types";
+import { attemptAutoMerge } from "@/features/Sync/data/policy";
+import type { Book } from "@/data/domain";
 
-function makeBook(overrides: Partial<BookEntry> = {}): BookEntry {
+function makeBook(overrides: Partial<Book> = {}): Book {
   return {
     id: "b1",
     title: "Title",
