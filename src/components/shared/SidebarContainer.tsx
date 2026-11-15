@@ -25,18 +25,22 @@ function SidebarBookList({ books, label }: { books: Book[]; label: string }) {
   return (
     <SidebarGroup>
       <h3 className="text-sm font-medium text-muted-foreground mb-2">{label}</h3>
-      <ul className="space-y-1 text-sm">
-        {books.map((book) => (
-          <li
-            key={book.id}
-            className="hover:bg-muted px-2 py-1 rounded flex justify-between items-center cursor-pointer"
-            onClick={() => router.push(`/dashboard/book/${book.fileId}`)}
-          >
-            <span className="truncate">{book.title}</span>
-            {book.isFavourite && <Star size={14} className="text-yellow-400 flex-shrink-0" />}
-          </li>
-        ))}
-      </ul>
+      {books.length === 0 ? (
+        <p className="px-2 text-xs text-muted-foreground/70">Nothing here yet</p>
+      ) : (
+        <ul className="space-y-1 text-sm">
+          {books.map((book) => (
+            <li
+              key={book.id}
+              className="hover:bg-muted px-2 py-1 rounded flex justify-between items-center cursor-pointer"
+              onClick={() => router.push(`/dashboard/book/${book.fileId}`)}
+            >
+              <span className="truncate">{book.title}</span>
+              {book.isFavourite && <Star size={14} className="text-yellow-400 flex-shrink-0" />}
+            </li>
+          ))}
+        </ul>
+      )}
     </SidebarGroup>
   );
 }
@@ -52,7 +56,9 @@ export function AppSidebar() {
   const recentBooks = [...allBooks]
     .sort((a, b) => b.updatedAt - a.updatedAt)
     .slice(0, 3);
-  const allSorted = [...allBooks].sort((a, b) => a.title.localeCompare(b.title));
+  const favouriteBooks = allBooks
+    .filter((book) => book.isFavourite)
+    .sort((a, b) => a.title.localeCompare(b.title));
 
   const displayName =
     typeof user?.user_metadata?.name === "string" && user.user_metadata.name.trim()
@@ -118,7 +124,7 @@ export function AppSidebar() {
             <SidebarBookList books={recentBooks} label="Recent" />
           )}
 
-          <SidebarBookList books={allSorted} label="All Books" />
+          <SidebarBookList books={favouriteBooks} label="Favourites" />
 
           {/* Manage Group */}
           <SidebarGroup>

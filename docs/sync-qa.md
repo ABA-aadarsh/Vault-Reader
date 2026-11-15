@@ -71,6 +71,15 @@ Check off each item as it passes.
 - [ ] **T16 — Multiple concurrent conflicts** — Two books conflicted at once → inbox lists both, resolving one doesn't touch the other.
 - [ ] **T17 — Retry/promote CAS edge** — A promote push hitting an existing row fails as *permanent* (not a stuck `open` conflict); entity marked `failed` with a visible Retry path.
 
+## Daily-use completeness (Tier 0)
+
+- [ ] **U1 — Reader resumes where you left off** — Read to page N on A, close the tab, reopen the same book. The viewer lands directly on page N with no banner or prompt.
+- [ ] **U2 — Local search works offline** — With the network off, press `Ctrl/Cmd+K` and search for a title, author, tag, and a phrase that only appears in a note. "In your library" results open the book; no Open Library section is shown.
+- [ ] **U3 — Library filters and sort persist** — Toggle the Favourites pill and select a tag, set the "Sort by" dropdown to Title, switch to list view, then reload. All preferences survive the reload. Clearing filters restores the full library, the empty-library vs. no-match states are distinct, and the sidebar lists Favourites (not All Books).
+- [ ] **U4 — Delete/promote blocked by conflict explains itself** — With an open conflict on a book, try delete, promote, and remove-download. Each toast says "Resolve this book's sync conflict first".
+- [ ] **U5 — Cover upload failure is not silent** — Force a storage upload error (e.g. block `*.supabase.co` storage requests). The push reports failure and the book stays unsynced with a visible retry path, instead of being marked synced without a cover object.
+- [ ] **U6 — Pull does not skip rows behind a pending entity** — Make a local edit on A (queued), edit a *different* book on B, sync A. The second book appears on A, and A's cursor stays before the pending row until the outbox drains.
+
 ## Session log (qa run 2026-09-13)
 
 Run 1 — Passed: C1, C2, C3, C5, C6, T9. Blocked: C4 (no note editor in UI).
@@ -97,3 +106,20 @@ Fixes shipped during this run:
 3. **Tombstone apply left stale blob statuses.** On the receiving device, `applyBook` tombstone branch (existing row) removed file/image blobs but never reset `fileSyncStatus`/`coverSyncStatus` → cover never re-downloaded and PDF showed a revoked-blob-URL error after restore. Fixed in `src/features/sync/pull.ts` (both statuses set to `not_downloaded`) and `src/lib/books.ts` `restoreBook` (defensive reset).
 4. **Restore failed when a pending delete outbox entry existed.** `restoreBook` called plain `enqueue(upsert)`, which throws when a `delete` entry is pending for the same entity. Fixed by adding an `allowUpsertAfterDelete` flag to `src/lib/outbox.ts`; `restoreBook` now replaces the pending delete with the restore upsert. (`tests/restore.test.ts` added.)
 5. **Reader page blob-URL revocation race.** `fetchFileBlob` depended on the `selectedBook` object reference → query invalidations (engine write → refetch) re-ran the fetch and revoked the blob URL while pdf.js was still loading it → "Unexpected server response (0)". Fixed by keying the auto-fetch effect on stable fields (`fileId`, `syncScope`) and deferring revocation of superseded blob URLs. (`src/app/dashboard/book/[bookId]/page.tsx`)
+
+## Session log (Tier 0 completeness, 2026-11-15)
+
+Implemented the Tier 0 "daily-use completeness" set. No sync protocol changes; one behavioural change to pull cursors (item 10).
+
+Fixes shipped:
+
+6. **Reader never resumed.** The library had no way back to a saved position. `PDFViewer` now accepts `initialPage`, restores once per document via `rowVirtualizer.scrollToIndex` (works before `pageHeight` is measured), and suppresses `onPageChange` until the restore lands so page 1 cannot overwrite the saved page. The reader page loads `getReadingState` and passes it through — resume is silent (no banner or "start over" prompt).
+7. **Search only hit Open Library.** `Ctrl/Cmd+K` required a network round-trip and could not find anything already in the vault. `searchLocal` (`features/Search/data/localSearch.ts`) scans local book metadata, tags, and note bodies with field-weighted scoring (exact > prefix > substring, multi-term fallback) and snippet extraction. `SearchLauncher` renders "In your library" always and "Open Library — online" only when online with a 3+ character query; local hits navigate to `/dashboard/book/<fileId>`.
+8. **No library filters or sort.** Added `src/lib/library-prefs.ts` (localStorage, mirroring the `theme` precedent — deliberately not synced) and `LibraryFilterBar`: tag pills on the left, a "Sort by" dropdown (recently added / title / author) on the right, plus persisted grid/list view mode. The sidebar's "All Books" list is now "Favourites". "Recently added" uses a new optional `Book.createdAt` (set on local create, taken from the cloud row's `created_at` on pull, falling back to `updatedAt` for pre-existing rows) — Dexie's primary key is a UUID, so `toArray()` order carries no recency information. No Dexie index was added since sorting happens in memory.
+9. **Generic error on conflict-blocked actions.** Delete, promote, and remove-download showed "Failed to …" when the repo guard threw an unresolved-conflict error. The dashboard now maps it to "Resolve this book's sync conflict first" (T11 finding, T17 retry path).
+10. **Pull stalled on the first pending entity.** `pullBooks` / `pullNotes` / `pullReadingStates` used `break`, so one locally-edited row hid every later cloud row until the outbox drained. The cursor now stops *before* the blocked row (`blocked` flag) while later rows are still applied; `hasMore` is purely `rows.length === PAGE_SIZE`, and `count` reports only rows actually written. Notes/reading states for a not-yet-local book block rather than advance, so they are retried instead of skipped.
+11. **Cover upload failures were silent.** `uploadImageIfMissing` logged a warning and returned, letting a book be marked synced with an `image_id` that has no storage object. It now throws `Image upload failed: …` so the push path classifies and retries it; a device with no local blob still returns quietly (metadata-only pull).
+
+Verification: `npx tsc --noEmit`, `npm run test` (72 passing, incl. new `tests/localSearch.test.ts` and blocked-cursor cases in `tests/pull.test.ts`), and `npm run build` all clean.
+
+Manual QA status: U1–U6 above are new and unrun. C4 and T8 are now runnable (NoteEditor is wired into the reader page); T17's retry path is now accompanied by the clearer conflict message. These still need a two-device pass.

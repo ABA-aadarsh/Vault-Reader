@@ -61,6 +61,7 @@ export async function createBook(
         coverSyncStatus: image ? "present" : "not_downloaded",
         syncStatus: syncScope === "cloud" ? "pending" : "synced",
         updatedAt: now,
+        createdAt: now,
         updatedByDeviceId: "",
         baseSnapshot: { title, author, tags, isFavourite },
       });

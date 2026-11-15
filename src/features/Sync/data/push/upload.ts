@@ -40,6 +40,9 @@ export async function uploadImageIfMissing(
   if (existing.data?.some((f) => f.name === `${imageId}.png`)) return;
 
   const imageEntry = await db.images.where("imageId").equals(imageId).first();
+  // A device that pulled only metadata legitimately has no local blob yet —
+  // that is not a failure. A real upload error must surface so the book is not
+  // marked synced with an image_id that has no object behind it.
   if (!imageEntry?.image) return;
 
   const path = `${userId}/${bookId}/${imageId}.png`;
@@ -47,5 +50,5 @@ export async function uploadImageIfMissing(
     .from(IMAGE_NAME)
     .upload(path, imageEntry.image, { cacheControl: "3600", upsert: false });
 
-  if (error) console.warn(`[Push] Image upload failed: ${error.message}`);
+  if (error) throw new Error(`Image upload failed: ${error.message}`);
 }

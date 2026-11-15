@@ -28,6 +28,8 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 interface PDFViewerProps {
   fileUrl: string | null;
   className?: string;
+  /** Page to restore on load (e.g. saved reading position). 1-based. */
+  initialPage?: number;
   onPageChange?: (currentPage: number, totalPages: number) => void;
 }
 
@@ -38,6 +40,7 @@ export interface PDFViewerHandle {
 export const PDFViewer = forwardRef<PDFViewerHandle, PDFViewerProps>(({
   fileUrl,
   className = "",
+  initialPage,
   onPageChange
 }, ref) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -53,6 +56,10 @@ export const PDFViewer = forwardRef<PDFViewerHandle, PDFViewerProps>(({
   const [pageHeight, setPageHeight] = useState(850);
   const [isZooming, setIsZooming] = useState(false);
   const [virtualizerKey, setVirtualizerKey] = useState(0);
+  // Restoring the saved reading position must finish before page changes are
+  // reported upward, otherwise page 1 would overwrite the stored position.
+  const [restoreDone, setRestoreDone] = useState(!initialPage);
+  const restoredForRef = useRef<string | null>(null);
 
   // Debounce timer for scale updates
   const debounceTimer = useRef<NodeJS.Timeout | null>(null);
@@ -167,6 +174,34 @@ export const PDFViewer = forwardRef<PDFViewerHandle, PDFViewerProps>(({
     jumpToPage: goToPage,
   }));
 
+  // A new document (or a late-arriving saved position) re-arms the restore.
+  useEffect(() => {
+    restoredForRef.current = null;
+    setRestoreDone(!initialPage || initialPage <= 1);
+  }, [fileUrl, initialPage]);
+
+  // Restore the saved position once the document knows its page count. Using
+  // the virtualizer's scrollToIndex avoids depending on pageHeight having been
+  // measured yet, which goToPage() requires.
+  //
+  // The "already restored" guard is set inside the frame (not before it) so a
+  // frame cancelled by a re-render simply re-schedules instead of disabling
+  // progress persistence forever.
+  useEffect(() => {
+    if (!initialPage || initialPage <= 1 || numPages === 0 || !fileUrl) return;
+    if (restoredForRef.current === fileUrl) return;
+
+    const index = Math.min(Math.max(initialPage, 1), numPages) - 1;
+    const raf = requestAnimationFrame(() => {
+      if (restoredForRef.current === fileUrl) return;
+      restoredForRef.current = fileUrl;
+      rowVirtualizer.scrollToIndex(index, { align: "start" });
+      setCurrentPage(index + 1);
+      setRestoreDone(true);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [initialPage, numPages, fileUrl, rowVirtualizer]);
+
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
       containerRef.current?.requestFullscreen();
@@ -213,11 +248,12 @@ export const PDFViewer = forwardRef<PDFViewerHandle, PDFViewerProps>(({
     }
   }, [scaledPageHeight, numPages, currentPage]);
 
-  // Report page changes upwards (used to persist reading progress)
+  // Report page changes upwards (used to persist reading progress).
+  // Suppressed until any saved-position restore has landed.
   useEffect(() => {
-    if (!onPageChange || numPages === 0) return;
+    if (!onPageChange || numPages === 0 || !restoreDone) return;
     onPageChange(currentPage, numPages);
-  }, [currentPage, numPages, onPageChange]);
+  }, [currentPage, numPages, onPageChange, restoreDone]);
 
   // Reduced frequency of virtualizer refresh to prevent flickering
   useEffect(() => {

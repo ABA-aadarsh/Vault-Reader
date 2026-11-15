@@ -100,6 +100,7 @@ async function applyBook(
         coverSyncStatus: "not_downloaded",
         syncStatus: "synced",
         updatedAt,
+        createdAt: cloudTime(cloudBook.created_at as string | null),
         updatedByDeviceId: "",
         baseSnapshot: {
           title: (cloudBook.title as string) ?? "",
@@ -176,6 +177,7 @@ async function applyBook(
       coverSyncStatus: values.coverSyncStatus ?? "not_downloaded",
       syncStatus: "synced",
       updatedAt,
+      createdAt: cloudTime(cloudBook.created_at as string | null),
       updatedByDeviceId: "",
       baseSnapshot: values.baseSnapshot,
     });
@@ -230,27 +232,45 @@ export async function pullBooks(db: BookVaultDexie, userId: string): Promise<{ c
   const rows = (data ?? []) as Array<Record<string, unknown>>;
   const pendingIds = await pendingEntityIds(db);
   const conflictedIds = await conflictedEntityIds(db);
-  let processed = 0;
+  let applied = 0;
+  let advanced = false;
   let lastCursor = cursor;
+  // Once a locally-pending entity is hit, the cursor must not move past it —
+  // otherwise the remote snapshot would never be retried. Rows after it are
+  // still applied; they are simply re-fetched next cycle (idempotent).
+  let blocked = false;
 
   for (const row of rows) {
     const id = row.id as string;
-    if (isPending("book", id, pendingIds)) break;
+    const rowCursor: PullCursor = { updatedAt: row.updated_at as string, id };
+
+    if (isPending("book", id, pendingIds)) {
+      blocked = true;
+      continue;
+    }
+
     if (isPending("book", id, conflictedIds)) {
-      lastCursor = { updatedAt: row.updated_at as string, id };
+      if (!blocked) {
+        lastCursor = rowCursor;
+        advanced = true;
+      }
       continue;
     }
 
     const existing = await db.books.get(id);
     if (!existing || Number(row.revision) > existing.baseRevision) {
       await applyBook(db, row);
+      applied++;
     }
-    lastCursor = { updatedAt: row.updated_at as string, id };
-    processed++;
+
+    if (!blocked) {
+      lastCursor = rowCursor;
+      advanced = true;
+    }
   }
 
-  if (lastCursor && processed > 0) await setCursor(db, "booksPullCursor", lastCursor);
-  return { count: processed, hasMore: rows.length === PAGE_SIZE || processed < rows.length };
+  if (advanced && lastCursor) await setCursor(db, "booksPullCursor", lastCursor);
+  return { count: applied, hasMore: rows.length === PAGE_SIZE };
 }
 
 export async function pullNotes(db: BookVaultDexie, userId: string): Promise<{ count: number; hasMore: boolean }> {
@@ -274,26 +294,49 @@ export async function pullNotes(db: BookVaultDexie, userId: string): Promise<{ c
   const rows = (data ?? []) as Array<Record<string, unknown>>;
   const pendingIds = await pendingEntityIds(db);
   const conflictedIds = await conflictedEntityIds(db);
-  let processed = 0;
+  let applied = 0;
+  let advanced = false;
   let lastCursor = cursor;
+  let blocked = false;
 
   for (const row of rows) {
     const id = row.book_id as string;
-    if (isPending("note", id, pendingIds)) break;
-    if (isPending("note", id, conflictedIds)) {
-      lastCursor = { updatedAt: row.updated_at as string, id };
+    const rowCursor: PullCursor = { updatedAt: row.updated_at as string, id };
+
+    if (isPending("note", id, pendingIds)) {
+      blocked = true;
       continue;
     }
-    if (!await db.books.get(id)) break;
+
+    if (isPending("note", id, conflictedIds)) {
+      if (!blocked) {
+        lastCursor = rowCursor;
+        advanced = true;
+      }
+      continue;
+    }
+
+    if (!await db.books.get(id)) {
+      // Book not local yet (its own pull may be blocked). Don't skip the note
+      // permanently by moving the cursor past it.
+      blocked = true;
+      continue;
+    }
 
     const existing = await db.notes.get(id);
-    if (!existing || Number(row.revision) > existing.baseRevision) await applyNote(db, row);
-    lastCursor = { updatedAt: row.updated_at as string, id };
-    processed++;
+    if (!existing || Number(row.revision) > existing.baseRevision) {
+      await applyNote(db, row);
+      applied++;
+    }
+
+    if (!blocked) {
+      lastCursor = rowCursor;
+      advanced = true;
+    }
   }
 
-  if (lastCursor && processed > 0) await setCursor(db, "notesPullCursor", lastCursor);
-  return { count: processed, hasMore: rows.length === PAGE_SIZE || processed < rows.length };
+  if (advanced && lastCursor) await setCursor(db, "notesPullCursor", lastCursor);
+  return { count: applied, hasMore: rows.length === PAGE_SIZE };
 }
 
 async function applyReadingState(
@@ -348,28 +391,47 @@ export async function pullReadingStates(
   const rows = (data ?? []) as Array<Record<string, unknown>>;
   const pendingIds = await pendingEntityIds(db);
   const conflictedIds = await conflictedEntityIds(db);
-  let processed = 0;
+  let applied = 0;
+  let advanced = false;
   let lastCursor = cursor;
+  let blocked = false;
 
   for (const row of rows) {
     const id = row.book_id as string;
-if (isPending("readingState", id, pendingIds)) break;
+    const rowCursor: PullCursor = { updatedAt: row.updated_at as string, id };
+
+    if (isPending("readingState", id, pendingIds)) {
+      blocked = true;
+      continue;
+    }
+
     if (isPending("readingState", id, conflictedIds)) {
-      lastCursor = { updatedAt: row.updated_at as string, id };
+      if (!blocked) {
+        lastCursor = rowCursor;
+        advanced = true;
+      }
       continue;
     }
+
     if (!await db.books.get(id)) {
-      lastCursor = { updatedAt: row.updated_at as string, id };
+      blocked = true;
       continue;
     }
+
     const existing = await db.readingState.get(id);
-    if (!existing || Number(row.revision) > existing.baseRevision) await applyReadingState(db, row);
-    lastCursor = { updatedAt: row.updated_at as string, id };
-    processed++;
+    if (!existing || Number(row.revision) > existing.baseRevision) {
+      await applyReadingState(db, row);
+      applied++;
+    }
+
+    if (!blocked) {
+      lastCursor = rowCursor;
+      advanced = true;
+    }
   }
 
-  if (lastCursor && processed > 0) await setCursor(db, "readingStatesPullCursor", lastCursor);
-  return { count: processed, hasMore: rows.length === PAGE_SIZE || processed < rows.length };
+  if (advanced && lastCursor) await setCursor(db, "readingStatesPullCursor", lastCursor);
+  return { count: applied, hasMore: rows.length === PAGE_SIZE };
 }
 
 export async function pullFromCloud(

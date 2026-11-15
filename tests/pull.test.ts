@@ -109,6 +109,28 @@ describe("pull — book snapshot apply", () => {
     expect(book!.revision).toBe(3);
   });
 
+  it("records the cloud created_at as createdAt on insert, and keeps it on update", async () => {
+    const { supabase } = await import("@/lib/supabase");
+    const row = cloudRow({ created_at: "2024-05-01T00:00:00Z" });
+    (supabase.from as ReturnType<typeof vi.fn>).mockReturnValue(mockSupabaseQuery([row]));
+
+    await pullBooks(db, "user-1");
+    const insertedAt = (await db.books.get("book-1"))!.createdAt;
+    expect(insertedAt).toBe(Date.parse("2024-05-01T00:00:00Z"));
+
+    // A later remote edit must not make the book look newly added.
+    (supabase.from as ReturnType<typeof vi.fn>).mockReturnValue(
+      mockSupabaseQuery([
+        cloudRow({ revision: 3, created_at: "2024-06-01T00:00:00Z" }),
+      ]),
+    );
+    await pullBooks(db, "user-1");
+
+    const book = await db.books.get("book-1");
+    expect(book!.revision).toBe(3);
+    expect(book!.createdAt).toBe(insertedAt);
+  });
+
   it("skips apply when pending outbox exists for entity", async () => {
     await db.outbox.add({
       entityType: "book",
@@ -393,5 +415,185 @@ describe("pull — cursor advancement", () => {
 
     const cursorEntry = await db.syncState.get("booksPullCursor");
     expect(cursorEntry).toBeUndefined();
+  });
+
+  it("applies later rows but never advances past a pending first row", async () => {
+    await db.outbox.add({
+      entityType: "book",
+      entityId: "book-1",
+      op: "upsert",
+      payload: { title: "Local Edit" },
+      baseRevision: 1,
+      createdAt: Date.now(),
+      attempts: 0,
+      nextAttemptAt: Date.now(),
+    });
+
+    const { supabase } = await import("@/lib/supabase");
+    const rows = [
+      cloudRow({ id: "book-1", updated_at: "2025-03-01T00:00:00Z" }),
+      cloudRow({ id: "book-2", updated_at: "2025-03-02T00:00:00Z" }),
+    ];
+    (supabase.from as ReturnType<typeof vi.fn>).mockReturnValue(mockSupabaseQuery(rows));
+
+    const result = await pullBooks(db, "user-1");
+
+    // The blocked row is not applied, but the one behind it still is.
+    expect(result.count).toBe(1);
+    expect(await db.books.get("book-1")).toBeUndefined();
+    expect(await db.books.get("book-2")).toBeDefined();
+
+    // Advancing would strand book-1's remote snapshot forever.
+    const cursorEntry = await db.syncState.get("booksPullCursor");
+    expect(cursorEntry).toBeUndefined();
+  });
+
+  it("stops the cursor at the row before a pending middle row", async () => {
+    await db.outbox.add({
+      entityType: "book",
+      entityId: "book-2",
+      op: "upsert",
+      payload: { title: "Local Edit" },
+      baseRevision: 1,
+      createdAt: Date.now(),
+      attempts: 0,
+      nextAttemptAt: Date.now(),
+    });
+
+    const { supabase } = await import("@/lib/supabase");
+    const rows = [
+      cloudRow({ id: "book-1", updated_at: "2025-03-01T00:00:00Z" }),
+      cloudRow({ id: "book-2", updated_at: "2025-03-02T00:00:00Z" }),
+      cloudRow({ id: "book-3", updated_at: "2025-03-03T00:00:00Z" }),
+    ];
+    (supabase.from as ReturnType<typeof vi.fn>).mockReturnValue(mockSupabaseQuery(rows));
+
+    const result = await pullBooks(db, "user-1");
+
+    expect(result.count).toBe(2);
+    expect(await db.books.get("book-2")).toBeUndefined();
+    expect(await db.books.get("book-3")).toBeDefined();
+
+    const cursorEntry = await db.syncState.get("booksPullCursor");
+    expect(cursorEntry).toBeDefined();
+    expect((cursorEntry!.value as { id: string }).id).toBe("book-1");
+    expect((cursorEntry!.value as { updatedAt: string }).updatedAt).toBe(
+      "2025-03-01T00:00:00Z",
+    );
+  });
+});
+
+describe("pull — blocked notes", () => {
+  const localBook = {
+    title: "Book",
+    author: "A",
+    tags: [],
+    isFavourite: false,
+    fileId: "f1",
+    imageId: null,
+    syncScope: "cloud" as const,
+    revision: 1,
+    baseRevision: 1,
+    deletedAt: null,
+    fileSyncStatus: "present" as const,
+    coverSyncStatus: "not_downloaded" as const,
+    syncStatus: "synced" as const,
+    updatedAt: Date.now(),
+    updatedByDeviceId: "",
+  };
+
+  it("blocks the cursor for a note whose book is missing, but applies later notes", async () => {
+    await db.books.add({ ...localBook, id: "book-1" });
+
+    const { supabase } = await import("@/lib/supabase");
+    const rows = [
+      {
+        book_id: "missing-book",
+        user_id: "user-1",
+        body: "Orphan note",
+        revision: 1,
+        deleted_at: null,
+        updated_at: "2025-03-01T00:00:00Z",
+      },
+      {
+        book_id: "book-1",
+        user_id: "user-1",
+        body: "Attached note",
+        revision: 1,
+        deleted_at: null,
+        updated_at: "2025-03-02T00:00:00Z",
+      },
+    ];
+    (supabase.from as ReturnType<typeof vi.fn>).mockReturnValue(mockSupabaseQuery(rows));
+
+    const result = await pullNotes(db, "user-1");
+
+    expect(result.count).toBe(1);
+    expect(await db.notes.get("book-1")).toBeDefined();
+    expect(await db.notes.get("missing-book")).toBeUndefined();
+
+    // Nothing before the orphan was processed, so no cursor is written; the
+    // orphan note is retried on the next cycle (its book may arrive then).
+    const cursorEntry = await db.syncState.get("notesPullCursor");
+    expect(cursorEntry).toBeUndefined();
+  });
+
+  it("stops the notes cursor before a pending note", async () => {
+    await db.books.add({ ...localBook, id: "book-1" });
+    await db.books.add({ ...localBook, id: "book-2" });
+    await db.books.add({ ...localBook, id: "book-3" });
+
+    await db.outbox.add({
+      entityType: "note",
+      entityId: "book-1",
+      op: "upsert",
+      payload: { body: "Local body" },
+      baseRevision: 1,
+      createdAt: Date.now(),
+      attempts: 0,
+      nextAttemptAt: Date.now(),
+    });
+
+    const { supabase } = await import("@/lib/supabase");
+    const rows = [
+      {
+        book_id: "book-3",
+        user_id: "user-1",
+        body: "First note",
+        revision: 1,
+        deleted_at: null,
+        updated_at: "2025-03-01T00:00:00Z",
+      },
+      {
+        book_id: "book-1",
+        user_id: "user-1",
+        body: "Cloud body",
+        revision: 2,
+        deleted_at: null,
+        updated_at: "2025-03-02T00:00:00Z",
+      },
+      {
+        book_id: "book-2",
+        user_id: "user-1",
+        body: "Other note",
+        revision: 1,
+        deleted_at: null,
+        updated_at: "2025-03-03T00:00:00Z",
+      },
+    ];
+    (supabase.from as ReturnType<typeof vi.fn>).mockReturnValue(mockSupabaseQuery(rows));
+
+    const result = await pullNotes(db, "user-1");
+
+    expect(result.count).toBe(2);
+    // The pending note keeps its unsent local edit …
+    expect(await db.notes.get("book-1")).toBeUndefined();
+    // … while rows on either side are still applied.
+    expect((await db.notes.get("book-3"))!.body).toBe("First note");
+    expect((await db.notes.get("book-2"))!.body).toBe("Other note");
+
+    const cursorEntry = await db.syncState.get("notesPullCursor");
+    expect(cursorEntry).toBeDefined();
+    expect((cursorEntry!.value as { id: string }).id).toBe("book-3");
   });
 });

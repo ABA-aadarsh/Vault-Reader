@@ -2,27 +2,75 @@
 
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
-import { Search, File, ArrowRight } from "lucide-react";
+import { Search, File, ArrowRight, StickyNote, WifiOff } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useSearchLauncher } from "../provider/SearchLauncherProvider";
-import { OpenBookLibraryAPI } from "@/features/Search";
+import { OpenBookLibraryAPI } from "../data/openLibrary";
+import { searchLocal, type LocalSearchHit } from "../data/localSearch";
+import { useDb } from "@/data/dexie";
+
+const LOCAL_DEBOUNCE_MS = 120;
+const REMOTE_DEBOUNCE_MS = 400;
+const REMOTE_MIN_QUERY = 3;
+
+type SearchItem =
+  | {
+      section: "local";
+      key: string;
+      kind: "book" | "note";
+      fileId: string;
+      title: string;
+      subtitle: string;
+    }
+  | {
+      section: "remote";
+      key: string;
+      title: string;
+      subtitle: string;
+      link: string;
+      image?: string;
+    };
 
 export function SearchLauncher() {
   const { open: isSearchLauncherOpen, onClose: closeSearchLauncher, onOpen: openSearchLauncher } = useSearchLauncher();
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<{
-    title: string;
-    link: string;
-    author: string;
-    image?: string;
-  }[]>([]);
+  const [localHits, setLocalHits] = useState<LocalSearchHit[]>([]);
+  const [remoteHits, setRemoteHits] = useState<{ title: string; link: string; author: string; image?: string }[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const launcherOpenRef = useRef<boolean>(false);
   const [isOnline, setIsOnline] = useState(true);
-  const [loading, setLoading] = useState(false);
+  const [loadingLocal, setLoadingLocal] = useState(false);
+  const [loadingRemote, setLoadingRemote] = useState(false);
+  const db = useDb();
+  const router = useRouter();
 
+  const items = useMemo<SearchItem[]>(() => {
+    const local: SearchItem[] = localHits.map((hit) => ({
+      section: "local",
+      key: `local-${hit.kind}-${hit.bookId}`,
+      kind: hit.kind,
+      fileId: hit.fileId,
+      title: hit.title,
+      subtitle:
+        hit.kind === "note"
+          ? hit.snippet || hit.author
+          : hit.author || "No author",
+    }));
+
+    const remote: SearchItem[] = remoteHits.map((hit, index) => ({
+      section: "remote",
+      key: `remote-${hit.link}-${index}`,
+      title: hit.title,
+      subtitle: hit.author,
+      link: hit.link,
+      image: hit.image,
+    }));
+
+    return [...local, ...remote];
+  }, [localHits, remoteHits]);
 
   // Keep launcher open reference in sync
   useEffect(() => {
@@ -35,15 +83,23 @@ export function SearchLauncher() {
       setTimeout(() => inputRef.current?.focus(), 100);
     }
     setQuery("");
+    setLocalHits([]);
+    setRemoteHits([]);
     setSelectedIndex(0);
   }, [isSearchLauncherOpen]);
 
-  const handleSelect = useCallback((item: { link?: string }) => {
-    if (item.link) {
-      window.open(item.link, "_blank", "noopener,noreferrer");
+  const handleSelect = useCallback((item: SearchItem | undefined) => {
+    if (!item) return;
+
+    if (item.section === "local") {
+      router.push(`/dashboard/book/${item.fileId}`);
       closeSearchLauncher();
+      return;
     }
-  }, [closeSearchLauncher]);
+
+    window.open(item.link, "_blank", "noopener,noreferrer");
+    closeSearchLauncher();
+  }, [closeSearchLauncher, router]);
 
   const searchLauncherKeyboardListener = useCallback((e: KeyboardEvent) => {
     if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
@@ -62,21 +118,21 @@ export function SearchLauncher() {
           break;
         case "ArrowDown":
           e.preventDefault();
-          setSelectedIndex((prev) => Math.min(prev + 1, results.length - 1));
+          setSelectedIndex((prev) => Math.min(prev + 1, items.length - 1));
           break;
         case "ArrowUp":
           e.preventDefault();
           setSelectedIndex((prev) => Math.max(prev - 1, 0));
           break;
         case "Enter":
-          if (results.length > 0) {
+          if (items.length > 0) {
             e.preventDefault();
-            handleSelect(results[selectedIndex]);
+            handleSelect(items[selectedIndex]);
           }
           break;
       }
     }
-  }, [results, selectedIndex, closeSearchLauncher, openSearchLauncher, handleSelect]);
+  }, [items, selectedIndex, closeSearchLauncher, openSearchLauncher, handleSelect]);
 
   // Global keyboard shortcut handler (always active)
   useEffect(() => {
@@ -97,18 +153,42 @@ export function SearchLauncher() {
     };
   }, []);
 
+  // Local library search — always available, online or not.
   useEffect(() => {
-    if (!query.trim() || !isOnline) {
-      setResults([]);
-      setLoading(false);
+    if (!query.trim()) {
+      setLocalHits([]);
+      setLoadingLocal(false);
       return;
     }
 
-    setLoading(true);
+    setLoadingLocal(true);
+    const timeout = setTimeout(async () => {
+      try {
+        setLocalHits(await searchLocal(db, query));
+      } catch (err) {
+        console.error("Local search error:", err);
+        setLocalHits([]);
+      } finally {
+        setLoadingLocal(false);
+      }
+    }, LOCAL_DEBOUNCE_MS);
+
+    return () => clearTimeout(timeout);
+  }, [query, db]);
+
+  // Open Library search — online only.
+  useEffect(() => {
+    if (!query.trim() || query.trim().length < REMOTE_MIN_QUERY || !isOnline) {
+      setRemoteHits([]);
+      setLoadingRemote(false);
+      return;
+    }
+
+    setLoadingRemote(true);
     const timeout = setTimeout(async () => {
       try {
         const data = await OpenBookLibraryAPI.search(query);
-        setResults(
+        setRemoteHits(
           data.map((item) => ({
             title: item.title,
             link: `https://openlibrary.org${item.key}`,
@@ -118,14 +198,22 @@ export function SearchLauncher() {
         );
       } catch (err) {
         console.error("Search error:", err);
+        setRemoteHits([]);
       } finally {
-        setLoading(false);
+        setLoadingRemote(false);
       }
-    }, 400); // debounce
+    }, REMOTE_DEBOUNCE_MS);
 
     return () => clearTimeout(timeout);
   }, [query, isOnline]);
 
+  // Keep the highlight in range as result sections change.
+  useEffect(() => {
+    setSelectedIndex(0);
+  }, [items.length]);
+
+  const busy = loadingLocal || loadingRemote;
+  let lastSection: SearchItem["section"] | null = null;
 
   return (
     <Dialog open={isSearchLauncherOpen} onOpenChange={closeSearchLauncher}>
@@ -133,7 +221,7 @@ export function SearchLauncher() {
         className="p-0 overflow-hidden border-0 shadow-2xl bg-popover rounded-xl max-w-2xl w-[90vw] max-h-[80vh]"
         aria-describedby={undefined}
       >
-        <DialogTitle className="sr-only">Search Documents</DialogTitle>
+        <DialogTitle className="sr-only">Search library</DialogTitle>
 
         {/* Header with Search Input */}
         <div className="relative">
@@ -146,12 +234,8 @@ export function SearchLauncher() {
                 <Input
                   ref={inputRef}
                   value={query}
-                  onChange={(e) => {
-                    setQuery(e.target.value);
-                    setSelectedIndex(0);
-                    // setResults(searchItems(e.target.value));
-                  }}
-                  placeholder="Search your documents..."
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search your library…"
                   className="bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 text-base placeholder:text-muted-foreground/70 h-auto py-2 border font-normal w-[90%]"
                 />
               </div>
@@ -164,35 +248,33 @@ export function SearchLauncher() {
 
         {/* Results */}
         <div className="max-h-96 overflow-y-auto">
-          {!isOnline ? (
-            // 🔌 Offline state
+          {!query.trim() && !busy ? (
+            // 💡 Empty input
             <div className="text-center py-12 px-6">
-              <div className="w-16 h-16 rounded-full bg-muted/50 flex items-center justify-center mx-auto mb-4">
-                <Search className="w-6 h-6 text-muted-foreground/50" />
+              <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                <Search className="w-6 h-6 text-primary/70" />
               </div>
-              <h3 className="font-medium text-sm mb-1">You are offline</h3>
+              <h3 className="font-medium text-sm mb-1">Search your vault</h3>
               <p className="text-xs text-muted-foreground">
-                Online search is disabled
+                Find books and notes in your library
               </p>
             </div>
-          ) : loading ? (
-            // 🔄 Loading state
-            <div className="flex flex-col items-center justify-center py-16 px-6 text-muted-foreground animate-pulse">
-              <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-                <Search className="w-5 h-5 text-primary" />
-              </div>
-              <h3 className="font-medium text-sm mb-1">Searching books...</h3>
-              <p className="text-xs">Fetching results from Open Library</p>
-            </div>
-          ) : results.length > 0 ? (
-            // ✅ Results state
-            <div>
-              <h4 className="text-xs text-muted-foreground font-medium px-6 pt-4 pb-1">
-                Open Library Results – Online
-              </h4>
-              <ul className="pb-2">
-                {results.map((item, index) => (
-                  <li key={item.title + index}>
+          ) : items.length > 0 ? (
+            // ✅ Results (library + Open Library)
+            <ul className="py-2">
+              {items.map((item, index) => {
+                const showHeader = item.section !== lastSection;
+                lastSection = item.section;
+
+                return (
+                  <li key={item.key}>
+                    {showHeader && (
+                      <h4 className="text-xs text-muted-foreground font-medium px-6 pt-3 pb-1">
+                        {item.section === "local"
+                          ? "In your library"
+                          : "Open Library — online"}
+                      </h4>
+                    )}
                     <button
                       className={cn(
                         "w-full text-left px-6 py-3 flex items-center gap-4 transition-all duration-150 group relative",
@@ -200,24 +282,26 @@ export function SearchLauncher() {
                           ? "bg-accent text-accent-foreground"
                           : "hover:bg-accent/50 hover:text-accent-foreground"
                       )}
-                      onClick={() => handleSelect({ link: item.link })}
+                      onClick={() => handleSelect(item)}
                       onMouseEnter={() => setSelectedIndex(index)}
                     >
                       <div
                         className={cn(
-                          "w-9 h-12 rounded-sm overflow-hidden flex-shrink-0 flex items-center justify-center transition-colors bg-muted/50",
+                          "w-9 h-12 rounded-sm overflow-hidden flex-shrink-0 flex items-center justify-center transition-colors",
                           selectedIndex === index
                             ? "bg-accent-foreground/10"
-                            : "group-hover:bg-accent-foreground/10"
+                            : "bg-muted/50 group-hover:bg-accent-foreground/10"
                         )}
                       >
-                        {item.image ? (
+                        {item.section === "remote" && item.image ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
                             src={item.image}
                             alt=""
                             className="w-full h-full object-cover"
                           />
+                        ) : item.section === "local" && item.kind === "note" ? (
+                          <StickyNote className="w-4 h-4" />
                         ) : (
                           <File className="w-4 h-4" />
                         )}
@@ -227,8 +311,8 @@ export function SearchLauncher() {
                         <span className="font-medium text-sm truncate block">
                           {item.title}
                         </span>
-                        <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                          {item.author}
+                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                          {item.subtitle}
                         </p>
                       </div>
 
@@ -242,38 +326,42 @@ export function SearchLauncher() {
                       />
                     </button>
                   </li>
-                ))}
-              </ul>
-            </div>
-          ) : query ? (
-            // ❌ No results
-            <div className="text-center py-12 px-6">
-              <div className="w-16 h-16 rounded-full bg-muted/50 flex items-center justify-center mx-auto mb-4">
-                <Search className="w-6 h-6 text-muted-foreground/50" />
+                );
+              })}
+            </ul>
+          ) : busy ? (
+            // 🔄 Loading state
+            <div className="flex flex-col items-center justify-center py-16 px-6 text-muted-foreground animate-pulse">
+              <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                <Search className="w-5 h-5 text-primary" />
               </div>
-              <h3 className="font-medium text-sm mb-1">No books found</h3>
-              <p className="text-xs text-muted-foreground">
-                Try adjusting your search terms
+              <h3 className="font-medium text-sm mb-1">Searching…</h3>
+              <p className="text-xs">
+                {isOnline ? "Library and Open Library" : "Your offline library"}
               </p>
             </div>
           ) : (
-            // 💡 Empty input
+            // ❌ No results
             <div className="text-center py-12 px-6">
-              <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                <Search className="w-6 h-6 text-primary/70" />
+              <div className="w-16 h-16 rounded-full bg-muted/50 flex items-center justify-center mx-auto mb-4">
+                {isOnline ? (
+                  <Search className="w-6 h-6 text-muted-foreground/50" />
+                ) : (
+                  <WifiOff className="w-6 h-6 text-muted-foreground/50" />
+                )}
               </div>
-              <h3 className="font-medium text-sm mb-1">Search your vault</h3>
+              <h3 className="font-medium text-sm mb-1">No matches</h3>
               <p className="text-xs text-muted-foreground">
-                Type to find documents, notes, and more
+                {isOnline
+                  ? "Nothing found in your library or on Open Library"
+                  : "Nothing in your library. Online search needs a connection."}
               </p>
             </div>
           )}
         </div>
 
-
-
         {/* Footer with navigation hints */}
-        {results.length > 0 && (
+        {items.length > 0 && (
           <>
             <div className="h-px bg-gradient-to-r from-transparent via-border to-transparent" />
             <div className="px-6 py-3 bg-muted/30">

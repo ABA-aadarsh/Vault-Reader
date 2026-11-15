@@ -5,6 +5,7 @@ export * from "./types";
 export * from "./components/BookCard";
 export * from "./components/BookMenu";
 export * from "./components/EditBookDialog";
+export * from "./components/LibraryFilterBar";
 export * from "./components/RecentlyDeletedSheet";
 export * from "./hooks/useBooks";
 export * from "./hooks/useCreateBook";

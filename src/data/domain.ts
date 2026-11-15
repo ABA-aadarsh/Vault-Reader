@@ -15,6 +15,7 @@ export interface Book {
   syncStatus: "synced" | "pending" | "conflict" | "failed";
   updatedAt: number;
   updatedByDeviceId: string;
+  createdAt?: number;
   origin?: string;
   baseSnapshot?: {
     title: string;

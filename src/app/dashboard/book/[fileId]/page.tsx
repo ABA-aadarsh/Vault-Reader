@@ -1,7 +1,7 @@
 "use client";
 
 import { NoteEditor } from "@/features/Notes";
-import { PDFViewer, type PDFViewerHandle, setPage } from "@/features/Reader";
+import { PDFViewer, type PDFViewerHandle, setPage, getReadingState } from "@/features/Reader";
 import { useBooks, getFileBlob } from "@/features/Books";
 import { useState, useEffect, useCallback, useRef } from "react";
 import React from "react";
@@ -26,6 +26,7 @@ export default function BookViewPage({ params }: PageProps) {
   const [fileUrl, setFileUrl] = useState<string | null>(null);
   const [isFetchingFile, setIsFetchingFile] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
+  const [initialPage, setInitialPage] = useState<number | undefined>(undefined);
   const db = useDb();
   const { user } = useAuth();
   const router = useRouter();
@@ -53,6 +54,29 @@ export default function BookViewPage({ params }: PageProps) {
       setSelectedBook(book || null);
     }
   }, [fileId, books, isLoading]);
+
+  const selectedBookId = selectedBook?.id;
+  useEffect(() => {
+    let cancelled = false;
+    setInitialPage(undefined);
+
+    if (!selectedBookId) return;
+
+    getReadingState(db, selectedBookId)
+      .then((state) => {
+        if (cancelled) return;
+        if (state && state.page > 1) {
+          setInitialPage(state.page);
+        }
+      })
+      .catch((error) => {
+        console.warn("Could not load saved reading position:", error);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [db, selectedBookId]);
 
   // Fetch the actual file blob and create blob URL
   const fetchFileBlob = useCallback(
@@ -167,10 +191,11 @@ export default function BookViewPage({ params }: PageProps) {
         <PDFViewer
           ref={viewerRef}
           fileUrl={fileUrl}
+          initialPage={initialPage}
           className="w-full h-full"
-          onPageChange={(page, totalPages) => {
+          onPageChange={(page, pages) => {
             if (selectedBook) {
-              setPage(db, selectedBook.id, page, totalPages);
+              setPage(db, selectedBook.id, page, pages);
             }
           }}
         />
