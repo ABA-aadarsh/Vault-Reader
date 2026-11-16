@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { BookVaultDexie } from "./schema";
 import { engine } from "@/features/Sync/data/SyncEngine";
+import { warmDownloadedBooks } from "@/lib/offline-warm";
 
 let _db: BookVaultDexie | null = null;
 
@@ -60,8 +61,10 @@ export function UserDbProvider({ userId, children }: UserDbProviderProps) {
   const [db, setDb] = useState<BookVaultDexie | null>(null);
 
   useEffect(() => {
-    setDb(openUserDb(userId));
+    const database = openUserDb(userId);
+    setDb(database);
     engine.init();
+    void warmDownloadedBooks(database);
 
     return () => {
       engine.destroy();

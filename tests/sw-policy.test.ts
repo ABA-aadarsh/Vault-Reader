@@ -8,6 +8,7 @@ import {
   isRscRequest,
   isSupabaseHost,
   navigationFallbackPaths,
+  BOOKS_CACHE,
   SHELL_CACHE,
   RUNTIME_CACHE,
   PRECACHE_URLS,
@@ -50,10 +51,11 @@ function makeResponse(overrides: Partial<{ status: number; type: string; cacheCo
 }
 
 describe("sw-policy — cache naming", () => {
-  it("separates shell and runtime caches and includes the version", () => {
+  it("separates shell, runtime and book caches and includes the version", () => {
     expect(SHELL_CACHE).toMatch(/^vault-shell-v\d+$/);
     expect(RUNTIME_CACHE).toMatch(/^vault-runtime-v\d+$/);
-    expect(SHELL_CACHE).not.toBe(RUNTIME_CACHE);
+    expect(BOOKS_CACHE).toMatch(/^vault-books-v\d+$/);
+    expect(new Set([SHELL_CACHE, RUNTIME_CACHE, BOOKS_CACHE]).size).toBe(3);
   });
 
   it("precaches the app shell entry points", () => {
@@ -149,6 +151,22 @@ describe("sw-policy — response cacheability", () => {
     expect(isCacheableResponse(makeResponse({ type: "opaque" }))).toBe(false);
     expect(isCacheableResponse(makeResponse({ cacheControl: "public, no-store" }))).toBe(false);
     expect(isCacheableResponse(makeResponse({ cacheControl: "max-age=0, must-revalidate" }))).toBe(true);
+  });
+
+  // Next renders dynamic routes with `no-store`; a warmed book route must still
+  // be cached, since this is our offline copy rather than an HTTP cache entry.
+  it("caches no-store responses when the caller opted in", () => {
+    const dynamicDocument = makeResponse({
+      cacheControl: "private, no-cache, no-store, max-age=0, must-revalidate",
+    });
+
+    expect(isCacheableResponse(dynamicDocument)).toBe(false);
+    expect(isCacheableResponse(dynamicDocument, { ignoreNoStore: true })).toBe(true);
+  });
+
+  it("still rejects incomplete responses when no-store is ignored", () => {
+    expect(isCacheableResponse(makeResponse({ status: 500 }), { ignoreNoStore: true })).toBe(false);
+    expect(isCacheableResponse(makeResponse({ type: "opaque" }), { ignoreNoStore: true })).toBe(false);
   });
 });
 

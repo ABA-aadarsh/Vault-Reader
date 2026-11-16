@@ -1,11 +1,13 @@
 /** Caching policy shared by public/sw.js and tests/sw-policy.test.ts. */
 
 /** Bump per release — clears all older vault-* caches on activate. */
-export const CACHE_VERSION = "v2";
+export const CACHE_VERSION = "v3";
 
 export const CACHE_PREFIX = "vault-";
 export const SHELL_CACHE = `${CACHE_PREFIX}shell-${CACHE_VERSION}`;
 export const RUNTIME_CACHE = `${CACHE_PREFIX}runtime-${CACHE_VERSION}`;
+/** Warmed book routes. Never trimmed, so a download stays openable offline. */
+export const BOOKS_CACHE = `${CACHE_PREFIX}books-${CACHE_VERSION}`;
 
 export const PRECACHE_URLS = [
   "/",
@@ -95,10 +97,16 @@ export function classifyRequest(request, origin) {
   return "network-first";
 }
 
-export function isCacheableResponse(response) {
+/**
+ * `ignoreNoStore` is for responses we cache deliberately (app documents, warmed
+ * routes): Next sends dynamic pages as `no-store`, which is about HTTP caches,
+ * not about our own offline copy.
+ */
+export function isCacheableResponse(response, { ignoreNoStore = false } = {}) {
   if (!response) return false;
   if (typeof response.status === "number" && response.status !== 200) return false;
   if (response.type === "opaque" || response.type === "opaqueredirect") return false;
+  if (ignoreNoStore) return true;
   const cacheControl = response.headers?.get?.("cache-control") ?? "";
   if (/no-store/i.test(cacheControl)) return false;
   return true;

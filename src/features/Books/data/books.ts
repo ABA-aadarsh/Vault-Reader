@@ -267,11 +267,12 @@ export async function hardPurgeLocal(
 /**
  * Remove a downloaded PDF blob for a book, keeping metadata.
  * No cloud change; re-opening the book re-downloads the PDF.
+ * Returns the `fileId` so callers can drop the warmed reader route.
  */
 export async function removeDownload(
   db: BookVaultDexie,
   bookId: string,
-): Promise<void> {
+): Promise<string> {
   const book = await db.books.get(bookId);
   if (!book) throw new Error("Book not found");
 
@@ -280,6 +281,8 @@ export async function removeDownload(
     .where("id")
     .equals(bookId)
     .modify({ fileSyncStatus: "not_downloaded" });
+
+  return book.fileId;
 }
 
 /**

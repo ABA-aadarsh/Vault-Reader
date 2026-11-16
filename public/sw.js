@@ -6,6 +6,7 @@ import {
   CACHE_PREFIX,
   SHELL_CACHE,
   RUNTIME_CACHE,
+  BOOKS_CACHE,
   PRECACHE_URLS,
   MAX_RUNTIME_ENTRIES,
   assetUrlsFromHtml,
@@ -34,7 +35,8 @@ self.addEventListener("activate", (event) => {
             (key) =>
               key.startsWith(CACHE_PREFIX) &&
               key !== SHELL_CACHE &&
-              key !== RUNTIME_CACHE,
+              key !== RUNTIME_CACHE &&
+              key !== BOOKS_CACHE,
           )
           .map((key) => caches.delete(key)),
       );
@@ -52,38 +54,64 @@ self.addEventListener("message", (event) => {
   }
 
   if (data.type === "WARM_ROUTE" && typeof data.url === "string") {
-    event.waitUntil(warmRoute(data.url));
+    const assets = Array.isArray(data.assets)
+      ? data.assets.filter((asset) => typeof asset === "string")
+      : [];
+    event.waitUntil(warmRoute(data.url, assets));
+    return;
+  }
+
+  if (data.type === "REMOVE_BOOK_ROUTE" && typeof data.url === "string") {
+    event.waitUntil(unwarmRoute(data.url));
   }
 });
 
 /** Cache a book route and its chunks so a downloaded book opens offline. */
-async function warmRoute(path) {
+async function warmRoute(path, extraAssets = []) {
   try {
-    const response = await fetch(new Request(path, DOCUMENT_REQUEST_INIT));
-    if (!isCacheableResponse(response)) {
+    const response = await fetch(
+      new Request(path, { ...DOCUMENT_REQUEST_INIT, cache: "reload" }),
+    );
+    if (!isCacheableResponse(response, { ignoreNoStore: true })) {
       console.warn("[SW] warmRoute: uncacheable response", path, response.status);
       return;
     }
 
     const html = await response.clone().text();
-    const cache = await caches.open(RUNTIME_CACHE);
+    const cache = await caches.open(BOOKS_CACHE);
 
     // Stored under the plain URL; navigation fallback matches with `ignoreVary`.
     await cache.put(new Request(path), response);
 
-    const assets = assetUrlsFromHtml(html);
+    const assets = new Set([...assetUrlsFromHtml(html), ...extraAssets]);
     await Promise.allSettled(
-      assets.map(async (url) => {
-        if (await caches.match(url)) return;
+      [...assets].map(async (url) => {
+        if (await cache.match(url)) return;
         const assetResponse = await fetch(url);
-        if (!isCacheableResponse(assetResponse)) return;
+        if (!isCacheableResponse(assetResponse, { ignoreNoStore: true })) return;
         await cache.put(new Request(url), assetResponse);
       }),
     );
 
-    await trimCache(cache);
+    if (!(await cache.match(new Request(path), { ignoreVary: true }))) {
+      console.warn("[SW] warmRoute: route did not stay cached", path);
+    }
   } catch (error) {
     console.warn("[SW] warmRoute failed", path, error);
+  }
+}
+
+/** Drop a book's cached route; its chunks may be shared with other routes. */
+async function unwarmRoute(path) {
+  try {
+    const cache = await caches.open(BOOKS_CACHE);
+    const target = new URL(path, self.location.origin).href;
+    const keys = await cache.keys();
+    await Promise.all(
+      keys.filter((key) => key.url === target).map((key) => cache.delete(key)),
+    );
+  } catch (error) {
+    console.warn("[SW] unwarmRoute failed", path, error);
   }
 }
 
@@ -112,7 +140,7 @@ async function cacheFirst(request) {
 
   try {
     const response = await fetch(request);
-    if (isCacheableResponse(response)) {
+    if (isCacheableResponse(response, { ignoreNoStore: true })) {
       await putInRuntime(request, response.clone());
     }
     return response;
@@ -122,9 +150,11 @@ async function cacheFirst(request) {
 }
 
 async function networkFirst(request) {
+  const sameOrigin = new URL(request.url).origin === self.location.origin;
+
   try {
     const response = await fetch(request);
-    if (isCacheableResponse(response)) {
+    if (isCacheableResponse(response, { ignoreNoStore: sameOrigin })) {
       await putInRuntime(request, response.clone());
     }
     return response;
@@ -141,7 +171,7 @@ async function networkFirst(request) {
 async function handleNavigation(request) {
   try {
     const response = await fetch(request);
-    if (isCacheableResponse(response)) {
+    if (isCacheableResponse(response, { ignoreNoStore: true })) {
       await putInRuntime(request, response.clone());
     }
     return response;
@@ -207,7 +237,7 @@ async function precache() {
       if (await cache.match(url)) return;
 
       const response = await fetch(new Request(url, { ...DOCUMENT_REQUEST_INIT, cache: "reload" }));
-      if (!isCacheableResponse(response)) {
+      if (!isCacheableResponse(response, { ignoreNoStore: true })) {
         console.warn("[SW] precache: uncacheable response", url, response.status);
         return;
       }
@@ -225,7 +255,7 @@ async function precache() {
         assetUrlsFromHtml(html).map(async (assetUrl) => {
           if (await cache.match(assetUrl)) return;
           const assetResponse = await fetch(assetUrl);
-          if (!isCacheableResponse(assetResponse)) return;
+          if (!isCacheableResponse(assetResponse, { ignoreNoStore: true })) return;
           await cache.put(new Request(assetUrl), assetResponse);
         }),
       );
