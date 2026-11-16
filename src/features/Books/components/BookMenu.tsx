@@ -1,7 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { MoreVertical, Pencil, CloudUpload, Download, Trash2 } from "lucide-react";
+import {
+  MoreVertical,
+  Pencil,
+  CloudUpload,
+  Download,
+  Loader2,
+  Trash2,
+} from "lucide-react";
 import type { BookViewModel } from "../types";
 import { useAuth } from "@/features/Auth";
 
@@ -9,6 +16,7 @@ interface BookMenuProps {
   book: BookViewModel;
   onEdit?: (book: BookViewModel) => void;
   onPromote?: (book: BookViewModel) => void;
+  onDownload?: (book: BookViewModel) => void;
   onRemoveDownload?: (book: BookViewModel) => void;
   onDelete?: (book: BookViewModel) => void;
 }
@@ -50,18 +58,22 @@ export function BookMenu({
   book,
   onEdit,
   onPromote,
+  onDownload,
   onRemoveDownload,
   onDelete,
 }: BookMenuProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const { session, fromCache } = useAuth();
+  const { session, fromCache, sessionExpired: flaggedExpired } = useAuth();
 
-  const sessionExpired = fromCache || (session.expires_at
-    ? session.expires_at * 1000 < Date.now()
-    : false);
+  // Null while running off the cached user (offline).
+  const sessionExpired =
+    fromCache ||
+    flaggedExpired ||
+    (session?.expires_at ? session.expires_at * 1000 < Date.now() : false);
   const isLocal = book.syncScope === "local";
   const hasDownload = book.fileSyncStatus === "present";
+  const isDownloading = book.fileSyncStatus === "downloading";
 
   useEffect(() => {
     if (!open) return;
@@ -110,6 +122,21 @@ export function BookMenu({
               onClick={trigger(onPromote)}
               disabled={sessionExpired}
               title={sessionExpired ? "Sign in to sync" : undefined}
+            />
+          )}
+          {!isLocal && !hasDownload && (
+            <MenuItem
+              icon={
+                isDownloading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Download className="w-4 h-4" />
+                )
+              }
+              label={isDownloading ? "Downloading…" : "Download for offline"}
+              onClick={trigger(onDownload)}
+              disabled={isDownloading || sessionExpired}
+              title={sessionExpired ? "Sign in to download" : undefined}
             />
           )}
           {!isLocal && hasDownload && (

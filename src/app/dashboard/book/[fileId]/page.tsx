@@ -9,6 +9,8 @@ import { Loader2, FileWarning, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useDb } from "@/data/dexie";
 import { downloadPdf } from "@/features/Sync";
+import { getIsOnline, reportReachable, reportUnreachable } from "@/lib/connectivity";
+import { isNetworkError } from "@/lib/network-error";
 import type { Book } from "@/data/domain";
 import { useAuth } from "@/features/Auth";
 import { useRouter } from "next/navigation";
@@ -26,6 +28,7 @@ export default function BookViewPage({ params }: PageProps) {
   const [fileUrl, setFileUrl] = useState<string | null>(null);
   const [isFetchingFile, setIsFetchingFile] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
+  const [missingOffline, setMissingOffline] = useState(false);
   const [initialPage, setInitialPage] = useState<number | undefined>(undefined);
   const db = useDb();
   const { user } = useAuth();
@@ -87,11 +90,22 @@ export default function BookViewPage({ params }: PageProps) {
       try {
         setIsFetchingFile(true);
         if (forRetry) setLoadFailed(false);
+        setMissingOffline(false);
 
         let blob = await getFileBlob(db, book.fileId);
 
         if (!blob && book.syncScope === "cloud") {
+          // Offline with no local copy: explain instead of "download failed".
+          if (!getIsOnline()) {
+            setMissingOffline(true);
+            setLoadFailed(true);
+            setFileUrl(null);
+            return;
+          }
+
           blob = await downloadPdf(db, user.id, book);
+          // A completed download proves the network works.
+          reportReachable();
         }
 
         if (blob) {
@@ -111,6 +125,11 @@ export default function BookViewPage({ params }: PageProps) {
         }
       } catch (error) {
         console.error("Error fetching file blob:", error);
+        if (isNetworkError(error)) {
+          // Keep the header pill and sync chip in agreement.
+          reportUnreachable();
+          setMissingOffline(true);
+        }
         setLoadFailed(true);
         setFileUrl(null);
       } finally {
@@ -161,9 +180,13 @@ export default function BookViewPage({ params }: PageProps) {
       <div className="flex items-center justify-center h-screen">
         <div className="text-center space-y-4 p-8">
           <FileWarning className="mx-auto h-16 w-16 text-red-400" />
-          <h2 className="text-2xl font-semibold">Failed to load PDF</h2>
+          <h2 className="text-2xl font-semibold">
+            {missingOffline ? "This book isn't downloaded yet" : "Failed to load PDF"}
+          </h2>
           <p className="text-muted">
-            The file could not be downloaded. Check your connection and try again.
+            {missingOffline
+              ? "You're offline. Connect to the internet, or download this book from its menu in the library first."
+              : "The file could not be downloaded. Check your connection and try again."}
           </p>
           <div className="flex justify-center gap-3">
             <Button onClick={() => fetchFileBlob(true)} disabled={isFetchingFile}>

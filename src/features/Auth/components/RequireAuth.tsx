@@ -13,7 +13,8 @@ interface RequireAuthProps {
 
 interface AuthContextValue {
   user: User
-  session: Session
+  /** Null while running from the cached user offline. */
+  session: Session | null
   fromCache: boolean
   sessionExpired: boolean
 }
@@ -28,6 +29,28 @@ export function useAuth(): AuthContextValue {
   return ctx
 }
 
+/** An access token that has already expired cannot be refreshed offline. */
+function isExpired(session: Session): boolean {
+  return typeof session.expires_at === 'number' && session.expires_at * 1000 <= Date.now()
+}
+
+const SESSION_READ_TIMEOUT_MS = 2500
+
+/**
+ * `getSession()` may refresh an expired token over the network and stall a cold
+ * start on "Loading...", so time out and fall back to the cached user.
+ */
+async function readStoredSession(): Promise<Session | null> {
+  const read = supabase.auth.getSession().then(({ data }) => data.session ?? null)
+
+  return Promise.race([
+    read,
+    new Promise<null>((resolve) => {
+      setTimeout(() => resolve(null), SESSION_READ_TIMEOUT_MS)
+    }),
+  ]).catch(() => null)
+}
+
 export const RequireAuth = ({ children, redirectTo = '/signin' }: RequireAuthProps) => {
   const router = useRouter()
   const [auth, setAuth] = useState<AuthContextValue | null>(null)
@@ -36,23 +59,37 @@ export const RequireAuth = ({ children, redirectTo = '/signin' }: RequireAuthPro
   authRef.current = auth
 
   useEffect(() => {
-    const init = async () => {
-      const { data } = await supabase.auth.getSession()
+    const applyCachedUser = (): boolean => {
+      const cachedUser = AuthAPI.getCachedUser()
+      if (!cachedUser) return false
 
-      if (data.session) {
-        setAuth({ user: data.session.user, session: data.session, fromCache: false, sessionExpired: false })
+      setAuth({
+        user: cachedUser,
+        session: null,
+        fromCache: true,
+        sessionExpired: true,
+      })
+      setLoading(false)
+      return true
+    }
+
+    const init = async () => {
+      const session = await readStoredSession()
+
+      if (session) {
+        // An expired session is usable locally, but sync/download need a re-auth.
+        const expired = isExpired(session)
+        setAuth({
+          user: session.user,
+          session,
+          fromCache: expired,
+          sessionExpired: expired,
+        })
         setLoading(false)
         return
       }
 
-      if (!navigator.onLine) {
-        const cachedUser = AuthAPI.getCachedUser()
-        if (cachedUser) {
-          setAuth({ user: cachedUser, session: null as unknown as Session, fromCache: true, sessionExpired: true })
-          setLoading(false)
-          return
-        }
-      }
+      if (applyCachedUser()) return
 
       router.replace(redirectTo)
       setLoading(false)

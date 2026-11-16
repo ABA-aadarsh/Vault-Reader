@@ -12,7 +12,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import Image from "next/image";
-import { PanelLeftClose, Search, Star, Trash2 } from "lucide-react";
+import { PanelLeftClose, Search, Settings, Star, Trash2 } from "lucide-react";
 import { useSearchLauncher } from "@/features/Search";
 import { useRouter } from "next/navigation";
 import { SyncStatusChip, SyncNowButton } from "@/features/Sync";
@@ -151,15 +151,17 @@ export function AppSidebar() {
           <Avatar className="w-9 h-9">
             <AvatarFallback>{initials}</AvatarFallback>
           </Avatar>
-          <div className="flex flex-col">
-            <span className="text-sm font-medium">{username}</span>
-            <span
-              className="text-xs text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
-              onClick={() => router.push("/dashboard/settings")}
-            >
-              Settings
-            </span>
-          </div>
+          <span className="flex-1 truncate text-sm font-medium">{username}</span>
+          <Button
+            size="icon"
+            variant="ghost"
+            aria-label="Settings"
+            title="Settings"
+            className="text-muted-foreground hover:text-foreground cursor-pointer"
+            onClick={() => router.push("/dashboard/settings")}
+          >
+            <Settings size={18} />
+          </Button>
         </div>
       </SidebarFooter>
     </Sidebar>

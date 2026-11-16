@@ -4,10 +4,11 @@ import { useSyncStatus } from "../hooks/useSyncStatus";
 import { engine } from "../data/SyncEngine";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useOnlineStatus } from "@/hooks/use-online-status";
 
 export function SyncNowButton() {
   const { status } = useSyncStatus();
-  const isOffline = typeof navigator !== "undefined" ? !navigator.onLine : false;
+  const isOffline = !useOnlineStatus();
   const isSyncing = status === "syncing";
   const isPaused = status === "paused";
 

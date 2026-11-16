@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { BookVaultDexie } from "@/data/dexie/schema";
 import type { Book, Note } from "@/data/domain";
-import { upsertNote, deleteNote } from "@/features/Notes/data/notes";
+import { upsertNote, deleteNote, getNote } from "@/features/Notes/data/notes";
 
 let db: BookVaultDexie;
 
@@ -163,5 +163,33 @@ describe("deleteNote", () => {
     await deleteNote(db, "book-1");
 
     expect(await db.outbox.count()).toBe(0);
+  });
+});
+
+describe("getNote", () => {
+  it("returns the note for a book that has one", async () => {
+    await seedBook();
+    await seedNote({ body: "hello" });
+
+    const note = await getNote(db, "book-1");
+
+    expect(note?.body).toBe("hello");
+  });
+
+  // React Query rejects `undefined` from a query function ("Query data cannot
+  // be undefined"), so "no note yet" must be `null`.
+  it("returns null — never undefined — when the book has no note", async () => {
+    await seedBook();
+
+    await expect(getNote(db, "book-1")).resolves.toBeNull();
+  });
+
+  it("returns null after a note is hard-deleted", async () => {
+    await seedBook();
+    await seedNote();
+
+    await deleteNote(db, "book-1");
+
+    await expect(getNote(db, "book-1")).resolves.toBeNull();
   });
 });

@@ -8,6 +8,8 @@ import { purgeExpiredTombstones } from "@/features/Books/data/books";
 import AuthAPI from "@/features/Auth/data/auth.service";
 import { queryClient } from "@/provider/queryClient";
 import { registerScheduler } from "@/lib/sync-scheduler";
+import { getNetworkAvailable, reportReachable, reportUnreachable } from "@/lib/connectivity";
+import { isNetworkError } from "@/lib/network-error";
 import { toast } from "sonner";
 
 const INTERVAL_MS = 60_000;
@@ -138,7 +140,9 @@ class SyncEngine {
     const startedAt = Date.now();
 
     try {
-      if (!navigator.onLine) {
+      // Only skip when the platform reports no interface: `navigator.onLine`
+      // stays true behind virtual adapters, so a dead link is caught below.
+      if (!getNetworkAvailable()) {
         this.setState({ status: "idle" });
         return;
       }
@@ -176,11 +180,14 @@ class SyncEngine {
       }
 
       const pullResult = await pullFromCloud(db, user.id, await getProgressSyncEnabled(db));
+
+      // A completed pull proves the network works again.
+      reportReachable();
+
       await planCoverDownloads(db, user.id);
       await purgeExpiredTombstones(db);
 
-      // The cycle wrote to Dexie (push status marks + pulled rows) outside React
-      // Query mutations, so flush query caches to re-read from Dexie live.
+      // Rows were written to Dexie outside React Query mutations.
       await queryClient.invalidateQueries();
 
       const totalPulled = pullResult.books + pullResult.notes + pullResult.readingStates;
@@ -212,11 +219,19 @@ class SyncEngine {
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      console.error("[SyncEngine] Cycle failed:", message);
-      this.setState({
-        status: "error",
-        lastError: message,
-      });
+
+      if (isNetworkError(error)) {
+        // Expected while offline; `console.error` would trip the Next dev overlay.
+        reportUnreachable();
+        console.warn("[SyncEngine] Offline, cycle skipped:", message);
+        this.setState({ status: "idle", lastError: null });
+      } else {
+        console.error("[SyncEngine] Cycle failed:", message);
+        this.setState({
+          status: "error",
+          lastError: message,
+        });
+      }
     } finally {
       this.running = false;
 
@@ -239,13 +254,13 @@ class SyncEngine {
   }
 
   private handleOnline() {
+    reportReachable();
     this.scheduleSync();
   }
 
   private handleOffline() {
-    if (this.state.status !== "error") {
-      this.setState({ status: "idle" });
-    }
+    reportUnreachable();
+    this.setState({ status: "idle" });
   }
 
   private handleVisibility() {

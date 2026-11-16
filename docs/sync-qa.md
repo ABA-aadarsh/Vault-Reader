@@ -80,7 +80,31 @@ Check off each item as it passes.
 - [ ] **U5 — Cover upload failure is not silent** — Force a storage upload error (e.g. block `*.supabase.co` storage requests). The push reports failure and the book stays unsynced with a visible retry path, instead of being marked synced without a cover object.
 - [ ] **U6 — Pull does not skip rows behind a pending entity** — Make a local edit on A (queued), edit a *different* book on B, sync A. The second book appears on A, and A's cursor stays before the pending row until the outbox drains.
 
-## Session log (qa run 2026-09-13)
+## Offline / PWA (browser)
+
+> Service workers require a production build: run `npm run build && npm start`
+> (`localhost` is a secure context). Registration is gated on
+> `NODE_ENV === "production"` — `npm run dev` unregisters any existing worker and
+> clears `vault-*` caches instead of caching HMR chunks.
+>
+> DevTools "Offline" is fine for shell/warm-cache checks. For anything involving
+> Supabase (re-auth, sync drain) prefer the OS network toggle or per-profile
+> request blocking of `*supabase.co*`.
+
+- [ ] **O1 — Worker activates in production** — Load any page from `npm start`. DevTools → Application → Service Workers shows `/sw.js` **activated and running**, scope `/`. The Cache Storage pane shows `vault-shell-v2` plus `vault-runtime-v2`.
+- [ ] **O2 — Cold offline reload serves the shell** — Load `/dashboard` online once, then go offline and reload. The library, sidebar, filters and covers render; the "Your Library" header shows an `Offline` pill (no stale pill when the connection returns); no failed `_next` asset requests.
+- [ ] **O3 — Cold offline start without a prior dashboard visit** — From a clean profile, load `/` online, then go offline and navigate to `/dashboard`. The shell still renders (documents are precached with their chunks).
+- [ ] **O4 — Downloaded book opens offline** — "Download for offline" on a cloud book, wait for the toast, go offline, open it: PDF renders, notes and reading progress work.
+- [ ] **O5 — Not-downloaded book offline** — Offline, click a cloud book that was never downloaded or warmed: a toast says it isn't downloaded yet and navigation does not happen. Opening that route directly (e.g. from history) shows the "This book isn't downloaded yet" screen with Retry.
+- [ ] **O6 — Offline writes queue and drain** — Create/edit/delete a note and change reading progress offline; the chip reads `Offline · N queued`. Reconnect → outbox drains and the chip returns to `Synced`.
+- [ ] **O7 — Expired session offline** — Expire the token (or stay offline long enough), reload: the re-auth banner appears but the library stays usable, and Download/Promote are disabled with "Sign in to …" titles.
+- [ ] **O8 — Update toast** — Rebuild (`npm run build`), reload once online: "New version available" toast appears; clicking Reload activates the new worker (`controllerchange` reload) and no stale shell remains.
+- [ ] **O9 — Downloaded filter** — Toggle the "Downloaded" pill: only books with a local blob are listed; the choice survives a reload; "Clear" resets it along with tags and favourites.
+- [ ] **O10 — Storage reporting** — Settings → Sync → Offline storage shows used/quota and eviction protection. After a download the used figure grows; "Keep offline data" flips a best-effort profile to persistent when the browser allows it.
+- [ ] **O11 — Quota failure copy** — With a nearly full profile (or by throttling storage), a download fails with "Not enough storage for this book" rather than a generic error, and the book keeps a visible retry path.
+- [ ] **O12 — Offline UI when `navigator.onLine` lies** — In DevTools → Network → Offline (where `navigator.onLine` stays `true`), wait for the next sync cycle or attempt a download. The console shows `[SyncEngine] Offline, cycle skipped: …` as a **warning** (no red dev overlay), the sidebar chip reads `Offline` (not `Error`), and the "Your Library" pill appears. Going back online clears both without a reload.
+
+
 
 Run 1 — Passed: C1, C2, C3, C5, C6, T9. Blocked: C4 (no note editor in UI).
 
@@ -123,3 +147,26 @@ Fixes shipped:
 Verification: `npx tsc --noEmit`, `npm run test` (72 passing, incl. new `tests/localSearch.test.ts` and blocked-cursor cases in `tests/pull.test.ts`), and `npm run build` all clean.
 
 Manual QA status: U1–U6 above are new and unrun. C4 and T8 are now runnable (NoteEditor is wired into the reader page); T17's retry path is now accompanied by the clearer conflict message. These still need a two-device pass.
+
+## Session log (Tier 1.1 offline, 2026-11-15)
+
+Implemented browser-native offline support. No new dependencies, no manifest
+(installability is deferred to 1.1b — it does not change caching or offline
+reading).
+
+Shipped:
+
+12. **Service worker re-enabled, production only.** `ServiceWorkerInit` is back in the root layout; `registerServiceWorker` registers `/sw.js` as a module worker only when `NODE_ENV === "production"`, and in dev unregisters existing workers and clears `vault-*` caches. Updates surface as a sonner "New version available" toast (SKIP_WAITING + `controllerchange` reload); update checks run on focus and every 10 min instead of every 60 s.
+13. **Policy extracted and rewritten.** `public/sw-policy.js` is the single source of truth (plain ESM, imported by both the worker and `tests/sw-policy.test.ts`): cache-first for `/_next/static/*` and static files, network-first for documents and `_rsc` payloads, network-only for Supabase, `/api/*` and non-GETs. `CACHE_VERSION` moved to `v2` with separate `vault-shell-*` / `vault-runtime-*` caches, a 100-entry runtime trim, and an `/offline` route as the last-resort navigation fallback.
+14. **Shell precache includes chunks.** Precaching documents without their build assets yields a blank page offline, so `install` also caches the `/_next/static/*` URLs referenced by each prerendered document.
+15. **"Download for offline".** `ensureBookDownloaded` (with in-flight dedupe and classified `DownloadError`s) + `useDownloadBook`; `BookMenu` gains the action for cloud books, `BookCard` shows an offline/downloading badge, and `LibraryFilterBar` gains a persisted "Downloaded" pill.
+16. **Route warming.** `router.prefetch` is not enough for a dynamic route: prefetch payloads are `Vary`-keyed and may be partial. After a download the client fetches the pdf.js worker and messages the service worker to cache the reader document plus every `_next/static` asset it references. Navigation fallback matching uses `ignoreVary`.
+17. **Auth hardening.** `AuthContextValue.session` is now nullable (the cached-user path supplies `null`, which previously crashed `BookMenu`). Startup reads the session with a 2.5 s cap, treats an expired session as cached (banner), and falls back to the cached user — so a cold offline start cannot hang on "Loading...".
+18. **Reactive connectivity.** New `useOnlineStatus` (`useSyncExternalStore`); the status chip now reads `Offline` / `Offline · N queued` instead of a stale `Pending(N)`, and `SyncNowButton` no longer reads `navigator.onLine` at render time. Settings reports storage usage/persistence, and the reader distinguishes "not downloaded yet" from a real download failure.
+19. **Two-signal connectivity.** `navigator.onLine` is not trustworthy: on Windows it stays `true` behind virtual adapters (Hyper-V / WSL / VMware), VPN clients and idle Ethernet ports, and Chrome keeps it `true` under DevTools offline throttling. So `src/lib/connectivity.ts` combines the platform flag with real request outcomes: a failed request (`reportUnreachable`) flips the UI to offline even when the flag says online, and a successful pull/download (`reportReachable`) clears it. `getIsOnline()` answers the UI; `getNetworkAvailable()` answers "is it worth retrying", so a failed cycle can never wedge the retry loop. `isNetworkError` (`src/lib/network-error.ts`) unifies Chrome/Firefox/Safari/Node failure messages; the engine treats those as connectivity (`console.warn`, `status: "idle"`) instead of `error`, and the chip now orders conflicts → offline → error → syncing → paused → pending → synced.
+
+Verification: `npx tsc --noEmit`, `npm run test` (107 passing, incl. new
+`tests/connectivity.test.ts`, `tests/sw-policy.test.ts` and `tests/download.test.ts`),
+`npm run build` (route table confirms `/dashboard` and `/offline` are static; reader
+route stays dynamic and is warmed per book). O1–O11 above are new and unrun — they
+need a browser pass against `npm run build && npm start`.

@@ -1,6 +1,6 @@
 "use client";
 
-import { Star, X } from "lucide-react";
+import { Star, X, HardDriveDownload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -25,6 +25,8 @@ interface LibraryFilterBarProps {
   onToggleTag: (tag: string) => void;
   onlyFavourites: boolean;
   onToggleFavourites: () => void;
+  onlyDownloaded: boolean;
+  onToggleDownloaded: () => void;
   onClear: () => void;
 }
 
@@ -36,9 +38,11 @@ export function LibraryFilterBar({
   onToggleTag,
   onlyFavourites,
   onToggleFavourites,
+  onlyDownloaded,
+  onToggleDownloaded,
   onClear,
 }: LibraryFilterBarProps) {
-  const hasActiveFilter = selectedTags.length > 0 || onlyFavourites;
+  const hasActiveFilter = selectedTags.length > 0 || onlyFavourites || onlyDownloaded;
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
@@ -58,6 +62,22 @@ export function LibraryFilterBar({
         >
           <Star className={`h-3.5 w-3.5 ${onlyFavourites ? "fill-current" : ""}`} />
           Favourites
+        </Button>
+
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          onClick={onToggleDownloaded}
+          aria-pressed={onlyDownloaded}
+          className={`h-7 rounded-full border px-2.5 text-xs cursor-pointer ${
+            onlyDownloaded
+              ? "border-primary/40 bg-primary/10 text-foreground"
+              : "border-border/60 text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <HardDriveDownload className="h-3.5 w-3.5" />
+          Downloaded
         </Button>
 
         {availableTags.map((tag) => {

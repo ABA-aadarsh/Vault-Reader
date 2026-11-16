@@ -11,15 +11,17 @@ import {
   EditBookDialog,
   useDeleteBook,
   usePromoteBook,
+  useDownloadBook,
   useRemoveDownload,
   useFailedOutbox,
   LibraryFilterBar,
 } from "@/features/Books";
 import { useState, useEffect, useMemo } from "react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { LayoutGrid, List, Library } from "lucide-react";
+import { LayoutGrid, List, Library, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useDb } from "@/data/dexie";
+import { useOnlineStatus } from "@/hooks/use-online-status";
 import { ConfirmationDialog } from "@/components/shared/ConfirmationDialog";
 import { toast } from "sonner";
 import {
@@ -57,8 +59,10 @@ export default function Page() {
   const db = useDb();
   const deleteBook = useDeleteBook();
   const promoteBook = usePromoteBook();
+  const downloadBook = useDownloadBook();
   const removeDownload = useRemoveDownload();
   const { data: failedOutbox } = useFailedOutbox();
+  const isOnline = useOnlineStatus();
 
   const [prefs, setPrefs] = useState<LibraryPrefs>(DEFAULT_LIBRARY_PREFS);
   const [editingBook, setEditingBook] = useState<BookViewModel | null>(null);
@@ -95,6 +99,7 @@ export default function Page() {
     const activeTags = prefs.filterTags;
     const filtered = booksList.filter((book) => {
       if (prefs.onlyFavourites && !book.isFavourite) return false;
+      if (prefs.onlyDownloaded && book.fileSyncStatus !== "present") return false;
       if (activeTags.length > 0 && !activeTags.some((tag) => book.tags.includes(tag))) {
         return false;
       }
@@ -207,6 +212,20 @@ export default function Page() {
     }
   };
 
+  const handleDownload = async (book: BookViewModel) => {
+    try {
+      await downloadBook.mutateAsync(book);
+      toast.success("Downloaded for offline reading");
+    } catch (error) {
+      console.error("Error downloading book:", error);
+      const message =
+        error instanceof Error && error.name === "DownloadError"
+          ? error.message
+          : friendlyError(error, "Failed to download book");
+      toast.error(message);
+    }
+  };
+
   const handleToggleTag = (tag: string) => {
     const activeTags = prefs.filterTags.includes(tag)
       ? prefs.filterTags.filter((value) => value !== tag)
@@ -215,7 +234,7 @@ export default function Page() {
   };
 
   const handleClearFilters = () => {
-    updatePrefs({ filterTags: [], onlyFavourites: false });
+    updatePrefs({ filterTags: [], onlyFavourites: false, onlyDownloaded: false });
   };
 
   const totalCount = booksList?.length ?? 0;
@@ -223,8 +242,20 @@ export default function Page() {
 
   return (
     <div className="min-h-screen bg-background text-foreground p-6 space-y-6">
-      <div className="flex justify-between items-center mb-2">
-        <h2 className="text-xl font-semibold">Your Library</h2>
+      <div className="flex justify-between items-center mb-4">
+        <div className="flex items-center gap-2.5">
+          <h2 className="text-xl font-semibold">Your Library</h2>
+          {!isOnline && (
+            <span
+              role="status"
+              title="Showing your local library — changes will sync when you reconnect"
+              className="flex items-center gap-1.5 rounded-full border border-border bg-muted px-2 py-0.5 text-xs text-muted-foreground"
+            >
+              <WifiOff className="h-3 w-3" />
+              Offline
+            </span>
+          )}
+        </div>
         <div className="flex items-center space-x-4">
           <AddBookButton />
           <ToggleGroup
@@ -262,6 +293,8 @@ export default function Page() {
           onToggleTag={handleToggleTag}
           onlyFavourites={prefs.onlyFavourites}
           onToggleFavourites={() => updatePrefs({ onlyFavourites: !prefs.onlyFavourites })}
+          onlyDownloaded={prefs.onlyDownloaded}
+          onToggleDownloaded={() => updatePrefs({ onlyDownloaded: !prefs.onlyDownloaded })}
           onClear={handleClearFilters}
         />
       )}
@@ -306,6 +339,7 @@ export default function Page() {
               onEdit={setEditingBook}
               onDelete={setDeletingBook}
               onPromote={setPromotingBook}
+              onDownload={handleDownload}
               onRemoveDownload={handleRemoveDownload}
             />
           ))}
@@ -322,6 +356,7 @@ export default function Page() {
               onEdit={setEditingBook}
               onDelete={setDeletingBook}
               onPromote={setPromotingBook}
+              onDownload={handleDownload}
               onRemoveDownload={handleRemoveDownload}
             />
           ))}

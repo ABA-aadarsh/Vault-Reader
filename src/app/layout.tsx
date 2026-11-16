@@ -39,9 +39,7 @@ export default function RootLayout({
         />
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        
-        {/* disabled service workers for now; it is caching the API */}
-        {/* <ServiceWorkerInit />  */}
+        <ServiceWorkerInit />
         <QueryProvider>
           {children}
         </QueryProvider>

@@ -19,11 +19,9 @@ import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
 import Image from "next/image";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { PDF_WORKER_SRC } from "../data/pdfWorker";
 
-pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-  "pdfjs-dist/build/pdf.worker.min.mjs",
-  import.meta.url
-).toString();
+pdfjs.GlobalWorkerOptions.workerSrc = PDF_WORKER_SRC;
 
 interface PDFViewerProps {
   fileUrl: string | null;

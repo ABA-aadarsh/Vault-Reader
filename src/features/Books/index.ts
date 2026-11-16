@@ -10,6 +10,7 @@ export * from "./components/RecentlyDeletedSheet";
 export * from "./hooks/useBooks";
 export * from "./hooks/useCreateBook";
 export * from "./hooks/useDeleteBook";
+export * from "./hooks/useDownloadBook";
 export * from "./hooks/useFailedOutbox";
 export * from "./hooks/usePromoteBook";
 export * from "./hooks/useRecentlyDeleted";

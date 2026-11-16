@@ -15,6 +15,7 @@ export interface LibraryPrefs {
   sort: LibrarySort;
   filterTags: string[];
   onlyFavourites: boolean;
+  onlyDownloaded: boolean;
   viewMode: LibraryViewMode;
 }
 
@@ -22,6 +23,7 @@ export const DEFAULT_LIBRARY_PREFS: LibraryPrefs = {
   sort: "added",
   filterTags: [],
   onlyFavourites: false,
+  onlyDownloaded: false,
   viewMode: "grid",
 };
 
@@ -41,6 +43,7 @@ function sanitize(value: unknown): LibraryPrefs {
       ? raw.filterTags.filter((tag): tag is string => typeof tag === "string")
       : [],
     onlyFavourites: raw.onlyFavourites === true,
+    onlyDownloaded: raw.onlyDownloaded === true,
     viewMode: VIEW_VALUES.includes(raw.viewMode as LibraryViewMode)
       ? (raw.viewMode as LibraryViewMode)
       : DEFAULT_LIBRARY_PREFS.viewMode,

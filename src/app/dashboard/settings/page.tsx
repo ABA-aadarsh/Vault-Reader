@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import { LogOut, Palette, Check, RefreshCcw, Wifi, WifiOff } from "lucide-react";
+import { LogOut, Palette, Check, RefreshCcw, Wifi, WifiOff, HardDrive } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,6 +11,12 @@ import { useDb } from "@/data/dexie";
 import { useRouter } from "next/navigation";
 import { getProgressSyncEnabled, setProgressSyncEnabled, useSyncStatus } from "@/features/Sync";
 import { getTheme, setTheme, type Theme } from "@/lib/theme";
+import {
+  formatBytes,
+  getStorageInfo,
+  requestPersistentStorage,
+  type StorageInfo,
+} from "@/lib/offline-storage";
 
 interface Tab {
   id: string;
@@ -23,6 +29,7 @@ const SettingsPage: React.FC = () => {
   const [selectedTheme, setSelectedTheme] = useState<Theme>("system");
   const [progressSync, setProgressSync] = useState(false);
   const [loadingProgressSync, setLoadingProgressSync] = useState(true);
+  const [storage, setStorage] = useState<StorageInfo | null>(null);
   const { user } = useAuth();
   const db = useDb();
   const router = useRouter();
@@ -50,6 +57,22 @@ const SettingsPage: React.FC = () => {
   const handleProgressSyncToggle = async (enabled: boolean) => {
     setProgressSync(enabled);
     await setProgressSyncEnabled(db, enabled);
+  };
+
+  // Best-effort; unavailable in some private modes.
+  useEffect(() => {
+    let cancelled = false;
+    getStorageInfo().then((info) => {
+      if (!cancelled) setStorage(info);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleRequestPersistence = async () => {
+    await requestPersistentStorage();
+    setStorage(await getStorageInfo());
   };
 
   const handleLogout = async () => {
@@ -178,6 +201,64 @@ const SettingsPage: React.FC = () => {
                       {progressSync
                         ? "Reading progress is syncing. Your page position will be shared across devices."
                         : "Reading progress is local-only. Each device tracks its own position."}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                {/* Offline storage */}
+                <Card className="border-accent">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <CardTitle className="flex items-center gap-2">
+                          <HardDrive className="w-4 h-4" />
+                          Offline storage
+                        </CardTitle>
+                        <CardDescription>
+                          Space used by downloaded PDFs, covers and notes on this device.
+                        </CardDescription>
+                      </div>
+                      {storage?.persisted === false && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="shrink-0 cursor-pointer"
+                          onClick={handleRequestPersistence}
+                        >
+                          Keep offline data
+                        </Button>
+                      )}
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-2 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Used</span>
+                      <span className="font-medium">
+                        {storage ? formatBytes(storage.usage) : "…"}
+                        {storage?.quota ? (
+                          <span className="text-muted-foreground">
+                            {" "}
+                            of {formatBytes(storage.quota)}
+                          </span>
+                        ) : null}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Eviction protection</span>
+                      <span className="font-medium">
+                        {storage === null
+                          ? "…"
+                          : storage.persisted === null
+                            ? "Not supported"
+                            : storage.persisted
+                              ? "Persistent"
+                              : "Best-effort"}
+                      </span>
+                    </div>
+                    <p className="pt-1 text-xs text-muted-foreground">
+                      {storage?.persisted
+                        ? "The browser will keep downloaded books until you remove them."
+                        : "The browser may evict downloaded books when the device runs low on space."}
                     </p>
                   </CardContent>
                 </Card>

@@ -10,7 +10,11 @@ import {
   AlertTriangle,
   CheckCircle,
   TriangleAlert,
+  HardDriveDownload,
+  Loader2,
 } from "lucide-react";
+import { toast } from "sonner";
+import { getIsOnline } from "@/lib/connectivity";
 import { BookMenu } from "./BookMenu";
 import type { BookViewModel } from "../types";
 import type { OutboxEntry } from "@/data/dexie";
@@ -26,6 +30,7 @@ type BookCardProps = {
   onEdit?: (book: BookViewModel) => void;
   onDelete?: (book: BookViewModel) => void;
   onPromote?: (book: BookViewModel) => void;
+  onDownload?: (book: BookViewModel) => void;
   onRemoveDownload?: (book: BookViewModel) => void;
 };
 
@@ -109,6 +114,7 @@ export const BookCard = ({
   onEdit,
   onDelete,
   onPromote,
+  onDownload,
   onRemoveDownload,
 }: BookCardProps) => {
   const router = useRouter();
@@ -122,10 +128,41 @@ export const BookCard = ({
     note,
     fileId,
     fileSyncStatus,
+    syncScope,
   } = book;
 
   const handleCardClick = () => {
+    // Offline + no PDF would navigate into a dead end.
+    if (!getIsOnline() && fileSyncStatus !== "present") {
+      toast.error("This book isn't downloaded yet", {
+        description: "Connect to the internet to download and read it.",
+      });
+      return;
+    }
+
     router.push(`/dashboard/book/${fileId}`);
+  };
+
+  const renderDownloadBadge = () => {
+    if (fileSyncStatus === "downloading") {
+      return (
+        <Loader2
+          className="w-3.5 h-3.5 animate-spin text-muted-foreground"
+          aria-label="Downloading"
+        />
+      );
+    }
+
+    if (fileSyncStatus === "present" && syncScope === "cloud") {
+      return (
+        <HardDriveDownload
+          className="w-3.5 h-3.5 text-muted-foreground"
+          aria-label="Available offline"
+        />
+      );
+    }
+
+    return null;
   };
 
   const renderVersionIcon = () => {
@@ -187,12 +224,14 @@ export const BookCard = ({
           </div>
           <div className="flex items-center gap-1">
             {note && <StickyNote className="text-muted w-4 h-4" />}
+            {renderDownloadBadge()}
             {renderVersionIcon()}
             {failedOp && <FailedOpMenu failedOp={failedOp} />}
             <BookMenu
               book={book}
               onEdit={onEdit}
               onPromote={onPromote}
+              onDownload={onDownload}
               onRemoveDownload={onRemoveDownload}
               onDelete={onDelete}
             />
@@ -247,12 +286,14 @@ export const BookCard = ({
 
       <div className="flex items-center gap-2">
         {note && <StickyNote className="text-muted w-4 h-4" />}
+        {renderDownloadBadge()}
         {renderVersionIcon()}
         {failedOp && <FailedOpMenu failedOp={failedOp} />}
         <BookMenu
           book={book}
           onEdit={onEdit}
           onPromote={onPromote}
+          onDownload={onDownload}
           onRemoveDownload={onRemoveDownload}
           onDelete={onDelete}
         />

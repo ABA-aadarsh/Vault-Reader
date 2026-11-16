@@ -8,7 +8,7 @@ import type { Note } from "@/data/domain";
 
 export function useNote(bookId: string) {
   const db = useDb();
-  return useQuery<Note | undefined>({
+  return useQuery<Note | null>({
     queryKey: ["note", bookId],
     queryFn: () => getNote(db, bookId),
     enabled: !!bookId,

@@ -5,12 +5,16 @@ import { scheduleSync } from "@/lib/sync-scheduler";
 
 /**
  * Get a note by bookId (1:1 relationship with book).
+ *
+ * Returns `null` when the book has no note yet: React Query treats an
+ * `undefined` query result as a contract violation ("Query data cannot be
+ * undefined"), and `null` is the documented way to say "no row".
  */
 export async function getNote(
   db: BookVaultDexie,
   bookId: string,
-): Promise<Note | undefined> {
-  return db.notes.get(bookId);
+): Promise<Note | null> {
+  return (await db.notes.get(bookId)) ?? null;
 }
 
 /**
