@@ -10,6 +10,7 @@ import {
   getReadingState,
   flushReadingState,
 } from "@/features/Reader";
+import { invalidateReadingStates } from "@/features/Reader/hooks/useReadingStates";
 import { useBooks, getFileBlob } from "@/features/Books";
 import { useState, useEffect, useCallback, useRef } from "react";
 import React from "react";
@@ -80,10 +81,11 @@ export default function BookViewPage({ params }: PageProps) {
     setCurrentPage(1);
   }, [fileUrl]);
 
-  // Persist any queued reading position when leaving the reader.
+  // Persist any queued reading position when leaving the reader, then refresh
+  // the sidebar's progress list — the library mounts before this write lands.
   useEffect(() => {
     return () => {
-      void flushReadingState();
+      void flushReadingState().then(invalidateReadingStates);
     };
   }, []);
 

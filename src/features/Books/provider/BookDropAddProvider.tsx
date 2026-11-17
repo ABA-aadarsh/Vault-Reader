@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Badge } from "@/components/ui/badge";
+import { TagInput } from "../components/TagInput";
 import {
   Upload,
   FileText,
@@ -83,7 +83,6 @@ const FileDropDialog = ({
     isFavourite: false,
     tags: [],
   });
-  const [newTag, setNewTag] = useState("");
   const [authorInput, setAuthorInput] = useState("");
 
   // Auto-populate file when dialog opens
@@ -132,23 +131,6 @@ const FileDropDialog = ({
     }
   };
 
-  const addTag = () => {
-    if (newTag.trim() && !formData.tags.includes(newTag.trim())) {
-      setFormData((prev) => ({
-        ...prev,
-        tags: [...prev.tags, newTag.trim()],
-      }));
-      setNewTag("");
-    }
-  };
-
-  const removeTag = (tagToRemove: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      tags: prev.tags.filter((tag) => tag !== tagToRemove),
-    }));
-  };
-
   const handleSubmit = async () => {
     const finalData = {
       ...formData,
@@ -186,7 +168,6 @@ const FileDropDialog = ({
       isFavourite: false,
       tags: [],
     });
-    setNewTag("");
     setAuthorInput("");
   };
 
@@ -350,7 +331,12 @@ const FileDropDialog = ({
 
                   <div className="space-y-3">
                     {/* Sync to Cloud */}
-                    <div className="flex items-center justify-between p-3 bg-muted rounded-lg border border-border">
+                    <label
+                      htmlFor="syncToCloud"
+                      className={`flex items-center justify-between p-3 bg-muted rounded-lg border border-border transition-colors ${
+                        isOnline ? "cursor-pointer hover:bg-accent/50" : "cursor-not-allowed opacity-60"
+                      }`}
+                    >
                       <div className="flex items-center gap-3">
                         {isOnline ? (
                           <Cloud className="w-4 h-4 text-primary" />
@@ -378,10 +364,13 @@ const FileDropDialog = ({
                         disabled={!isOnline}
                         className="data-[state=checked]:bg-primary data-[state=checked]:border-primary"
                       />
-                    </div>
+                    </label>
 
                     {/* Favourite */}
-                    <div className="flex items-center justify-between p-3 bg-muted rounded-lg border border-border">
+                    <label
+                      htmlFor="isFavourite"
+                      className="flex items-center justify-between p-3 bg-muted rounded-lg border border-border cursor-pointer transition-colors hover:bg-accent/50"
+                    >
                       <div className="flex items-center gap-3">
                         <Heart
                           className={`w-4 h-4 ${
@@ -410,7 +399,7 @@ const FileDropDialog = ({
                         }
                         className="data-[state=checked]:bg-destructive data-[state=checked]:border-destructive"
                       />
-                    </div>
+                    </label>
                   </div>
                 </div>
               </div>
@@ -421,52 +410,12 @@ const FileDropDialog = ({
               <Label className="text-sm font-medium text-foreground">
                 Tags
               </Label>
-
-              {/* Existing Tags */}
-              {formData.tags.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {formData.tags.map((tag) => (
-                    <Badge
-                      key={tag}
-                      variant="secondary"
-                      className="bg-secondary text-secondary-foreground border-0 rounded-full px-3 py-1 flex items-center gap-2"
-                    >
-                      {tag}
-                      <button
-                        onClick={() => removeTag(tag)}
-                        className="hover:text-destructive transition-colors"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </Badge>
-                  ))}
-                </div>
-              )}
-
-              {/* Add Tag Input */}
-              <div className="flex gap-2">
-                <Input
-                  value={newTag}
-                  onChange={(e) => setNewTag(e.target.value)}
-                  placeholder="Add a tag..."
-                  className="flex-1 border-border rounded-lg h-10 focus:border-ring focus:ring-ring/20 bg-background"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      addTag();
-                    }
-                  }}
-                />
-                <Button
-                  onClick={addTag}
-                  disabled={!newTag.trim()}
-                  variant="outline"
-                  size="sm"
-                  className="h-10 px-4 border-border hover:bg-accent hover:border-ring"
-                >
-                  <Plus className="w-4 h-4" />
-                </Button>
-              </div>
+              <TagInput
+                tags={formData.tags}
+                onChange={(tags) =>
+                  setFormData((prev) => ({ ...prev, tags }))
+                }
+              />
             </div>
           </div>
         </div>

@@ -30,6 +30,13 @@ export async function getReadingState(
   return db.readingState.get(bookId);
 }
 
+/** All saved reading positions, used by the sidebar's Continue reading list. */
+export async function listReadingStates(
+  db: BookVaultDexie,
+): Promise<ReadingState[]> {
+  return db.readingState.toArray();
+}
+
 async function writeProgress(
   db: BookVaultDexie,
   bookId: string,

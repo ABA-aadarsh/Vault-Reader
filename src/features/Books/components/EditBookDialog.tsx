@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { useUpdateBook } from "../hooks/useUpdateBook";
+import { TagInput } from "./TagInput";
 
 interface EditBookDialogProps {
   bookId: string;
@@ -39,14 +40,14 @@ export function EditBookDialog({
   const updateBook = useUpdateBook();
   const [title, setTitle] = useState(initial.title);
   const [author, setAuthor] = useState(initial.author);
-  const [tagsInput, setTagsInput] = useState(initial.tags.join(", "));
+  const [tags, setTags] = useState<string[]>(initial.tags);
   const [isFavourite, setIsFavourite] = useState(initial.isFavourite);
 
   useEffect(() => {
     if (open) {
       setTitle(initial.title);
       setAuthor(initial.author);
-      setTagsInput(initial.tags.join(", "));
+      setTags(initial.tags);
       setIsFavourite(initial.isFavourite);
     }
   }, [open, initial]);
@@ -56,11 +57,6 @@ export function EditBookDialog({
       toast.error("Resolve the conflict on this book first");
       return;
     }
-
-    const tags = tagsInput
-      .split(",")
-      .map((t) => t.trim())
-      .filter((t) => t.length > 0);
 
     const updates: { title?: string; author?: string; tags?: string[]; isFavourite?: boolean } = {};
     if (title !== initial.title) updates.title = title;
@@ -126,27 +122,20 @@ export function EditBookDialog({
 
           <div className="space-y-2">
             <Label htmlFor="edit-tags">Tags</Label>
-            <Input
-              id="edit-tags"
-              value={tagsInput}
-              onChange={(e) => setTagsInput(e.target.value)}
-              placeholder="Comma-separated tags"
-            />
-            <p className="text-xs text-muted-foreground">
-              Separate multiple tags with commas
-            </p>
+            <TagInput tags={tags} onChange={setTags} id="edit-tags" />
           </div>
 
-          <div className="flex items-center gap-2">
+          <label
+            htmlFor="edit-favourite"
+            className="flex items-center gap-2 cursor-pointer"
+          >
             <Checkbox
               id="edit-favourite"
               checked={isFavourite}
               onCheckedChange={(v) => setIsFavourite(v === true)}
             />
-            <Label htmlFor="edit-favourite" className="cursor-pointer">
-              Favourite
-            </Label>
-          </div>
+            <span className="text-sm font-medium leading-none">Favourite</span>
+          </label>
         </div>
 
         <DialogFooter>

@@ -16,8 +16,9 @@ import { useSearchLauncher } from "@/features/Search";
 import { useRouter } from "next/navigation";
 import { SyncStatusChip, SyncNowButton } from "@/features/Sync";
 import { useBooks } from "@/features/Books";
+import { useReadingStates } from "@/features/Reader/hooks/useReadingStates";
 import { useAuth } from "@/features/Auth";
-import type { Book } from "@/data/domain";
+import type { Book, ReadingState } from "@/data/domain";
 
 function SidebarBookList({ books, label }: { books: Book[]; label: string }) {
   const router = useRouter();
@@ -44,15 +45,69 @@ function SidebarBookList({ books, label }: { books: Book[]; label: string }) {
   );
 }
 
+function ContinueReadingList({
+  items,
+}: {
+  items: { book: Book; state: ReadingState }[];
+}) {
+  const router = useRouter();
+  return (
+    <SidebarGroup>
+      <h3 className="text-sm font-medium text-muted-foreground mb-2">
+        Continue reading
+      </h3>
+      {items.length === 0 ? (
+        <p className="px-2 text-xs text-muted-foreground/70">Nothing here yet</p>
+      ) : (
+        <ul className="space-y-2 text-sm">
+          {items.map(({ book, state }) => (
+            <li
+              key={book.id}
+              className="hover:bg-muted px-2 py-1.5 rounded cursor-pointer"
+              onClick={() => router.push(`/library/book/${book.fileId}`)}
+            >
+              <div className="flex justify-between items-center gap-2">
+                <span className="truncate flex-1">{book.title}</span>
+                {book.isFavourite && (
+                  <Star size={14} className="text-yellow-400 flex-shrink-0" />
+                )}
+                <span className="text-xs text-muted-foreground flex-shrink-0">
+                  {state.percent}%
+                </span>
+              </div>
+              <div className="mt-1 h-1 w-full rounded-full bg-muted overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-primary"
+                  style={{ width: `${Math.min(100, Math.max(0, state.percent))}%` }}
+                />
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </SidebarGroup>
+  );
+}
+
 export function AppSidebar() {
   const { onOpen: onSearchLauncherOpen } = useSearchLauncher();
   const router = useRouter();
   const { user } = useAuth();
   const { data: books } = useBooks();
+  const { data: readingStates } = useReadingStates();
 
   const allBooks = books ?? [];
-  const recentBooks = [...allBooks]
+  const continueReading = (readingStates ?? [])
+    .filter((state) => state.percent > 0 && state.percent < 100)
     .sort((a, b) => b.updatedAt - a.updatedAt)
+    .map((state) => ({
+      book: allBooks.find((book) => book.id === state.bookId),
+      state,
+    }))
+    .filter(
+      (entry): entry is { book: Book; state: ReadingState } =>
+        entry.book !== undefined,
+    )
     .slice(0, 3);
   const favouriteBooks = allBooks
     .filter((book) => book.isFavourite)
@@ -113,9 +168,7 @@ export function AppSidebar() {
         </div>
 
         <ScrollArea className="space-y-6">
-          {allBooks.length > 0 && (
-            <SidebarBookList books={recentBooks} label="Recent" />
-          )}
+          <ContinueReadingList items={continueReading} />
 
           <SidebarBookList books={favouriteBooks} label="Favourites" />
 

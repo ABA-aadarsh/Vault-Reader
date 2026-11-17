@@ -445,7 +445,7 @@ export const NoteEditor = ({
               ref={attachEditor}
               markdown={note?.body ?? ""}
               onChange={handleMarkdownChange}
-            className="prose prose-sm w-full max-w-full prose-invert dark-theme dark-editor"
+            className="prose prose-sm w-full max-w-full dark:prose-invert dark-editor"
             plugins={[
               headingsPlugin(),
               listsPlugin(),
