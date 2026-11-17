@@ -16,7 +16,6 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import React from "react";
 import { Loader2, FileWarning, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useDb } from "@/data/dexie";
 import { downloadPdf } from "@/features/Sync";
 import { getIsOnline, reportReachable, reportUnreachable } from "@/lib/connectivity";
@@ -42,7 +41,6 @@ export default function BookViewPage({ params }: PageProps) {
   const [initialPage, setInitialPage] = useState<number | undefined>(undefined);
   const [pdf, setPdf] = useState<PDFDocument | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [showThumbnails, setShowThumbnails] = useState(false);
   const [notesOpen, setNotesOpen] = useState(true);
   const db = useDb();
   const { user } = useAuth();
@@ -68,7 +66,6 @@ export default function BookViewPage({ params }: PageProps) {
 
   const handleSelectPage = useCallback((page: number) => {
     viewerRef.current?.jumpToPage(page);
-    setShowThumbnails(false);
   }, []);
 
   const handleBack = useCallback(() => {
@@ -80,6 +77,12 @@ export default function BookViewPage({ params }: PageProps) {
     setPdf(null);
     setCurrentPage(1);
   }, [fileUrl]);
+
+  // Notes start open on desktop; on a phone they overlay the document, so
+  // begin closed to keep the page readable.
+  useEffect(() => {
+    if (window.innerWidth < 768) setNotesOpen(false);
+  }, []);
 
   // Persist any queued reading position when leaving the reader, then refresh
   // the sidebar's progress list — the library mounts before this write lands.
@@ -267,7 +270,6 @@ export default function BookViewPage({ params }: PageProps) {
         initialPage={initialPage}
         title={selectedBook.title}
         onBack={handleBack}
-        onShowThumbnails={() => setShowThumbnails(true)}
         onDocumentLoad={handleDocumentLoad}
         notesOpen={notesOpen}
         onToggleNotes={() => setNotesOpen((open) => !open)}
@@ -283,33 +285,33 @@ export default function BookViewPage({ params }: PageProps) {
           />
         }
         rightPanel={
-          /* Keyed by book so switching books flushes the previous note and
-             starts from a clean editor. */
-          <NoteEditor
-            key={selectedBook.id}
-            bookId={selectedBook.id}
-            open={notesOpen}
-            onClose={() => setNotesOpen(false)}
-          />
+          <>
+            {/* Mobile: notes slide over the document; tap the backdrop to close. */}
+            {notesOpen && (
+              <button
+                type="button"
+                aria-label="Close notes"
+                onClick={() => setNotesOpen(false)}
+                className="absolute inset-0 z-20 bg-black/40 md:hidden"
+              />
+            )}
+            <div
+              className={`absolute inset-y-0 right-0 z-30 w-[min(90vw,420px)] max-w-full shadow-xl transition-transform duration-200 md:relative md:z-auto md:w-auto md:max-w-none md:translate-x-0 md:shadow-none ${
+                notesOpen ? "translate-x-0" : "translate-x-full"
+              }`}
+            >
+              {/* Keyed by book so switching books flushes the previous note and
+                  starts from a clean editor. */}
+              <NoteEditor
+                key={selectedBook.id}
+                bookId={selectedBook.id}
+                open={notesOpen}
+                onClose={() => setNotesOpen(false)}
+              />
+            </div>
+          </>
         }
       />
-
-      {/* Small screens: the rail is a drawer instead of a fixed column. */}
-      <Sheet open={showThumbnails} onOpenChange={setShowThumbnails}>
-        <SheetContent side="left" className="w-[220px] p-0 sm:max-w-[220px]">
-          <SheetHeader className="sr-only">
-            <SheetTitle>Page thumbnails</SheetTitle>
-          </SheetHeader>
-          <PdfThumbnailRail
-            key={fileUrl ?? "none"}
-            className="w-full border-r-0"
-            collapsible={false}
-            pdf={pdf}
-            currentPage={currentPage}
-            onSelect={handleSelectPage}
-          />
-        </SheetContent>
-      </Sheet>
     </div>
   );
 }

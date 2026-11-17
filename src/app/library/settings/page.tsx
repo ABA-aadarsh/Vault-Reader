@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import { LogOut, Palette, Check, RefreshCcw, Wifi, WifiOff, HardDrive } from "lucide-react";
+import { ArrowLeft, LogOut, Palette, Check, RefreshCcw, Wifi, WifiOff, HardDrive } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -91,10 +91,21 @@ const SettingsPage: React.FC = () => {
       {/* Header */}
       <header className="border-b border-card-foreground/10 bg-card/50 backdrop-blur supports-[backdrop-filter]:bg-card/50">
         <div className="container mx-auto px-6 py-6">
-          <div className="flex items-center justify-between">
-            <div className="space-y-1">
-              <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
-              <p className="text-muted-foreground">Manage your sync and account preferences</p>
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => router.push("/library")}
+                title="Back to library"
+                aria-label="Back to library"
+              >
+                <ArrowLeft className="w-4 h-4" />
+              </Button>
+              <div className="space-y-1">
+                <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Settings</h1>
+                <p className="text-muted-foreground">Manage your sync and account preferences</p>
+              </div>
             </div>
             <Button variant="destructive" onClick={handleLogout} size="sm" className="cursor-pointer rounded-sm">
               <LogOut className="w-4 h-4 mr-2" />

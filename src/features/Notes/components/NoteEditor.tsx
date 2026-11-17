@@ -383,7 +383,7 @@ export const NoteEditor = ({
   return (
     <aside
       className={`h-full shrink-0 bg-background flex flex-col overflow-hidden ${
-        open ? "w-[420px] border-l border-border" : "w-0"
+        open ? "w-full border-l border-border md:w-[420px]" : "w-0"
       }`}
     >
       <div className="flex items-center justify-between px-4 py-3 border-b border-border">

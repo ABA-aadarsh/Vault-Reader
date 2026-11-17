@@ -616,13 +616,17 @@ export function BookAddProvider({ children }: { children: React.ReactNode }) {
 }
 
 // Demo Component showing how to use the hook
-export function AddBookButton() {
+export function AddBookButton({ compact = false }: { compact?: boolean } = {}) {
   const { openDialog } = useBookAdd();
 
   return (
-    <Button onClick={() => openDialog()} className="flex items-center gap-2">
+    <Button
+      onClick={() => openDialog()}
+      className="flex items-center gap-2"
+      aria-label="Add Book"
+    >
       <Plus className="w-4 h-4" />
-      Add Book
+      <span className={compact ? "hidden sm:inline" : undefined}>Add Book</span>
     </Button>
   );
 }

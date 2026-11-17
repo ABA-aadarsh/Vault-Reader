@@ -22,7 +22,6 @@ import {
   Loader2,
   Maximize2,
   Minimize2,
-  PanelLeft,
   StickyNote,
   ZoomIn,
   ZoomOut,
@@ -68,8 +67,6 @@ interface PDFViewerProps {
   rightPanel?: ReactNode;
   /** Rendered as a back button when provided (the reader has no app sidebar). */
   onBack?: () => void;
-  /** Opens the thumbnail rail on small screens. */
-  onShowThumbnails?: () => void;
   /** Hands the loaded pdf.js document to the caller (used by the thumbnail rail). */
   onDocumentLoad?: (document: PDFDocument, numPages: number) => void;
   /** Whether the notes panel is visible; drives the toolbar toggle. */
@@ -98,7 +95,6 @@ export const PDFViewer = forwardRef<PDFViewerHandle, PDFViewerProps>(({
   rightPanel,
   title,
   onBack,
-  onShowThumbnails,
   onDocumentLoad,
   notesOpen,
   onToggleNotes,
@@ -603,7 +599,7 @@ export const PDFViewer = forwardRef<PDFViewerHandle, PDFViewerProps>(({
     >
       {/* The toolbar spans the whole panel; everything else lives below it. */}
       <div className="shrink-0 border-b border-border bg-card shadow-sm">
-        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-x-3 gap-y-2 px-3 py-2">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-2 px-3 py-2 md:grid md:grid-cols-[1fr_auto_1fr] md:gap-x-3">
           {/* Identity (left) */}
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             {onBack && (
@@ -678,18 +674,6 @@ export const PDFViewer = forwardRef<PDFViewerHandle, PDFViewerProps>(({
               </div>
             )}
 
-            {onShowThumbnails && (
-              <Button
-                onClick={onShowThumbnails}
-                variant="ghost"
-                size="icon"
-                className="md:hidden"
-                title="Page thumbnails"
-                aria-label="Page thumbnails"
-              >
-                <PanelLeft className="h-4 w-4" />
-              </Button>
-            )}
           </div>
 
           {/* Zoom (center) */}
@@ -783,7 +767,7 @@ export const PDFViewer = forwardRef<PDFViewerHandle, PDFViewerProps>(({
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1">
+      <div className="relative flex min-h-0 flex-1">
         {leftPanel}
 
         {/* Scroll area stays mounted while loading so it can be measured. */}

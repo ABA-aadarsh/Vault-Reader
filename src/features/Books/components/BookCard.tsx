@@ -184,9 +184,9 @@ export const BookCard = ({
     return (
       <div
         onClick={handleCardClick}
-        className="bg-card border border-border rounded-lg p-4 flex flex-col gap-3 shadow-sm cursor-pointer hover:shadow-md hover:border-primary/50 transition-all"
+        className="bg-card border border-border rounded-lg p-2.5 md:p-4 flex flex-col gap-2 md:gap-3 shadow-sm cursor-pointer hover:shadow-md hover:border-primary/50 transition-all"
       >
-        <div className="relative aspect-[3/4] w-full overflow-hidden rounded-md bg-muted">
+        <div className="relative aspect-[4/5] md:aspect-[3/4] w-full overflow-hidden rounded-md bg-muted">
           <Image
             src={image ?? fallbackImage}
             alt={title}
@@ -201,19 +201,19 @@ export const BookCard = ({
           )}
         </div>
 
-        <div className="flex items-center justify-between gap-2 text-sm">
+        <div className="flex items-center justify-between gap-2 text-xs md:text-sm">
           <h3 className="font-medium text-foreground truncate">{title}</h3>
-          {isFavourite && <Star className="text-yellow-400 w-4 h-4" />}
+          {isFavourite && <Star className="text-yellow-400 w-3.5 h-3.5 md:w-4 md:h-4 shrink-0" />}
         </div>
 
-        <p className="text-card-foreground text-xs truncate">{author}</p>
+        <p className="text-card-foreground text-[11px] md:text-xs truncate">{author}</p>
 
-        <div className="flex justify-between items-center text-xs">
+        <div className="flex justify-between items-center text-[11px] md:text-xs">
           <div className="flex gap-1 flex-wrap">
             {tags.slice(0, 2).map((tag) => (
               <span
                 key={tag}
-                className="bg-accent text-accent-foreground px-2 py-0.5 rounded-md text-[10px]"
+                className="bg-accent text-accent-foreground px-1.5 py-0 md:px-2 md:py-0.5 rounded-md text-[9px] md:text-[10px]"
               >
                 {tag}
               </span>
@@ -245,10 +245,10 @@ export const BookCard = ({
   return (
     <div
       onClick={handleCardClick}
-      className="bg-card border border-border rounded-md px-4 py-3 flex items-center justify-between gap-4 shadow-sm cursor-pointer hover:shadow-md hover:border-primary/50 transition-all"
+      className="bg-card border border-border rounded-md px-3 py-2.5 md:px-4 md:py-3 flex items-center justify-between gap-3 md:gap-4 shadow-sm cursor-pointer hover:shadow-md hover:border-primary/50 transition-all"
     >
-      <div className="flex items-center gap-4 min-w-0">
-        <div className="w-12 h-16 relative rounded bg-muted overflow-hidden shrink-0">
+      <div className="flex items-center gap-3 md:gap-4 min-w-0">
+        <div className="w-10 h-14 md:w-12 md:h-16 relative rounded bg-muted overflow-hidden shrink-0">
           <Image
             src={image ?? fallbackImage}
             alt={title}
@@ -271,7 +271,7 @@ export const BookCard = ({
             {isFavourite && <Star className="text-yellow-400 w-4 h-4" />}
           </div>
           <p className="text-card-foreground text-xs truncate">{author}</p>
-          <div className="flex gap-1 text-[10px] mt-1 flex-wrap">
+          <div className="flex gap-1 text-[10px] mt-0.5 md:mt-1 flex-wrap">
             {tags.slice(0, 3).map((tag) => (
               <span
                 key={tag}

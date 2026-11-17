@@ -18,8 +18,10 @@ import {
 } from "@/features/Books";
 import { useState, useEffect, useMemo } from "react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { LayoutGrid, List, Library, WifiOff } from "lucide-react";
+import { LayoutGrid, List, Library, Search, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useSearchLauncher } from "@/features/Search";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useDb } from "@/data/dexie";
 import { useOnlineStatus } from "@/hooks/use-online-status";
 import { ConfirmationDialog } from "@/components/shared/ConfirmationDialog";
@@ -63,6 +65,7 @@ export default function Page() {
   const removeDownload = useRemoveDownload();
   const { data: failedOutbox } = useFailedOutbox();
   const isOnline = useOnlineStatus();
+  const { onOpen: openSearch } = useSearchLauncher();
 
   const [prefs, setPrefs] = useState<LibraryPrefs>(DEFAULT_LIBRARY_PREFS);
   const [editingBook, setEditingBook] = useState<BookViewModel | null>(null);
@@ -241,10 +244,11 @@ export default function Page() {
   const libraryIsEmpty = totalCount === 0;
 
   return (
-    <div className="min-h-screen bg-background text-foreground p-6 space-y-6">
-      <div className="flex justify-between items-center mb-4">
+    <div className="min-h-screen bg-background text-foreground p-4 md:p-6 space-y-6">
+      <div className="flex justify-between items-center gap-3 mb-4">
         <div className="flex items-center gap-2.5">
-          <h2 className="text-xl font-semibold">Your Library</h2>
+          <SidebarTrigger className="md:hidden -ml-1" />
+          <h2 className="text-lg md:text-xl font-semibold">Your Library</h2>
           {!isOnline && (
             <span
               role="status"
@@ -256,8 +260,18 @@ export default function Page() {
             </span>
           )}
         </div>
-        <div className="flex items-center space-x-4">
-          <AddBookButton />
+        <div className="flex items-center gap-2 md:gap-4">
+          <AddBookButton compact />
+          <Button
+            variant="outline"
+            size="icon"
+            className="md:hidden"
+            onClick={openSearch}
+            title="Search library"
+            aria-label="Search library"
+          >
+            <Search className="w-4 h-4" />
+          </Button>
           <ToggleGroup
             type="single"
             value={prefs.viewMode}
@@ -328,7 +342,7 @@ export default function Page() {
           </Button>
         </div>
       ) : prefs.viewMode === "grid" ? (
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-6">
           {displayBooks.map((book) => (
             <BookCard
               key={book.docId}
@@ -345,7 +359,7 @@ export default function Page() {
           ))}
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-2.5 md:space-y-4">
           {displayBooks.map((book) => (
             <BookCard
               key={book.docId}
