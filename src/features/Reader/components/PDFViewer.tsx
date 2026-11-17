@@ -525,6 +525,36 @@ export const PDFViewer = forwardRef<PDFViewerHandle, PDFViewerProps>(({
     return () => element.removeEventListener("wheel", handleWheel);
   }, [handleWheel]);
 
+  // Arrow keys smoothly scroll the document, from anywhere in the reader.
+  // Text fields and the notes editor keep normal arrow-key behaviour.
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+
+      const target = event.target as HTMLElement | null;
+      if (
+        target?.isContentEditable ||
+        target?.closest("input, textarea, select, [contenteditable='true']")
+      ) {
+        return;
+      }
+
+      const element = containerRef.current;
+      if (!element) return;
+
+      event.preventDefault();
+      const distance = Math.max(80, Math.min(element.clientHeight * 0.6, 600));
+      element.scrollBy({
+        top: event.key === "ArrowDown" ? distance : -distance,
+        behavior: "smooth",
+      });
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   const toggleFullscreen = useCallback(() => {
     if (!document.fullscreenElement) {
       void rootRef.current?.requestFullscreen?.();
@@ -603,6 +633,51 @@ export const PDFViewer = forwardRef<PDFViewerHandle, PDFViewerProps>(({
               </span>
             )}
 
+            {/* Page navigation sits beside the book title. */}
+            {numPages > 0 && (
+              <div className="flex items-center gap-0.5">
+                <Button
+                  onClick={() => goToPage(currentPage - 1)}
+                  disabled={currentPage <= 1}
+                  variant="ghost"
+                  size="icon"
+                  title="Previous page"
+                  aria-label="Previous page"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+
+                <div className="flex items-center gap-1 text-xs tabular-nums">
+                  <input
+                    type="number"
+                    min="1"
+                    max={numPages}
+                    value={pageInput}
+                    onChange={(event) => setPageInput(event.target.value)}
+                    onBlur={commitPageInput}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") event.currentTarget.blur();
+                    }}
+                    onFocus={(event) => event.currentTarget.select()}
+                    aria-label="Page number"
+                    className="w-10 rounded border border-input bg-background px-1 py-1 text-center text-xs tabular-nums [appearance:textfield] [-moz-appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                  />
+                  <span className="whitespace-nowrap text-muted-foreground">/ {numPages}</span>
+                </div>
+
+                <Button
+                  onClick={() => goToPage(currentPage + 1)}
+                  disabled={currentPage >= numPages}
+                  variant="ghost"
+                  size="icon"
+                  title="Next page"
+                  aria-label="Next page"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+
             {onShowThumbnails && (
               <Button
                 onClick={onShowThumbnails}
@@ -652,52 +727,8 @@ export const PDFViewer = forwardRef<PDFViewerHandle, PDFViewerProps>(({
             </Button>
           </div>
 
-          {/* Page navigation + view tools (right) */}
+          {/* View tools (right) */}
           <div className="flex min-w-0 flex-wrap items-center justify-end gap-1">
-            {numPages > 0 && (
-              <div className="flex items-center gap-0.5">
-                <Button
-                  onClick={() => goToPage(currentPage - 1)}
-                  disabled={currentPage <= 1}
-                  variant="ghost"
-                  size="icon"
-                  title="Previous page"
-                  aria-label="Previous page"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-
-                <div className="flex items-center gap-1 text-xs tabular-nums">
-                  <input
-                    type="number"
-                    min="1"
-                    max={numPages}
-                    value={pageInput}
-                    onChange={(event) => setPageInput(event.target.value)}
-                    onBlur={commitPageInput}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") event.currentTarget.blur();
-                    }}
-                    onFocus={(event) => event.currentTarget.select()}
-                    aria-label="Page number"
-                    className="w-10 rounded border border-input bg-background px-1 py-1 text-center text-xs tabular-nums [appearance:textfield] [-moz-appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                  />
-                  <span className="whitespace-nowrap text-muted-foreground">/ {numPages}</span>
-                </div>
-
-                <Button
-                  onClick={() => goToPage(currentPage + 1)}
-                  disabled={currentPage >= numPages}
-                  variant="ghost"
-                  size="icon"
-                  title="Next page"
-                  aria-label="Next page"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-            )}
-
             <Button
               onClick={() => setFitMode("fit-width")}
               variant={zoomMode === "fit-width" ? "secondary" : "outline"}
@@ -759,7 +790,7 @@ export const PDFViewer = forwardRef<PDFViewerHandle, PDFViewerProps>(({
         <div ref={paneRef} className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
           <div
             ref={containerRef}
-            className="absolute inset-0 overflow-auto overscroll-contain bg-background"
+            className="absolute inset-0 overflow-auto overscroll-y-contain bg-background"
           >
             {fileUrl && (
               <Document

@@ -408,7 +408,7 @@ export function PdfThumbnailRail({
 
           <div
             ref={scrollRef}
-            className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-2"
+            className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain py-2"
           >
             {numPages > 0 ? (
               <div style={{ position: "relative", height: totalSize, width: "100%" }}>

@@ -8,7 +8,6 @@ import {
   SidebarHeader,
 } from "@/components/ui/sidebar";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import Image from "next/image";
 import { Search, Settings, Star, Trash2 } from "lucide-react";
@@ -32,10 +31,10 @@ function SidebarBookList({ books, label }: { books: Book[]; label: string }) {
           {books.map((book) => (
             <li
               key={book.id}
-              className="hover:bg-muted px-2 py-1 rounded flex justify-between items-center cursor-pointer"
+              className="hover:bg-muted px-2 py-1 rounded flex justify-between items-center gap-2 cursor-pointer"
               onClick={() => router.push(`/library/book/${book.fileId}`)}
             >
-              <span className="truncate">{book.title}</span>
+              <span className="min-w-0 flex-1 truncate">{book.title}</span>
               {book.isFavourite && <Star size={14} className="text-yellow-400 flex-shrink-0" />}
             </li>
           ))}
@@ -67,7 +66,7 @@ function ContinueReadingList({
               onClick={() => router.push(`/library/book/${book.fileId}`)}
             >
               <div className="flex justify-between items-center gap-2">
-                <span className="truncate flex-1">{book.title}</span>
+                <span className="min-w-0 flex-1 truncate">{book.title}</span>
                 {book.isFavourite && (
                   <Star size={14} className="text-yellow-400 flex-shrink-0" />
                 )}
@@ -167,7 +166,7 @@ export function AppSidebar() {
           </Button>
         </div>
 
-        <ScrollArea className="space-y-6">
+        <div className="space-y-6">
           <ContinueReadingList items={continueReading} />
 
           <SidebarBookList books={favouriteBooks} label="Favourites" />
@@ -184,7 +183,7 @@ export function AppSidebar() {
               Recently deleted
             </Button>
           </SidebarGroup>
-        </ScrollArea>
+        </div>
       </SidebarContent>
 
       {/* Footer Avatar */}
