@@ -20,28 +20,27 @@ import {
   thematicBreakPlugin,
   toolbarPlugin,
   UndoRedo,
+  useLexicalNodeRemove,
   usePublisher,
   type JsxEditorProps,
   type MDXEditorMethods,
 } from "@mdxeditor/editor";
 import {
-  ChevronLeft,
-  ChevronRight,
   FileText,
   Check,
   X,
+  Loader2,
   StickyNote,
-  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useDb } from "@/data/dexie";
-import { deleteNote, upsertNote } from "../data/notes";
+import { upsertNote } from "../data/notes";
 import { invalidateNote, useNote } from "../hooks/useNote";
 import "@mdxeditor/editor/style.css";
 
-const AUTOSAVE_DEBOUNCE_MS = 1000;
+const AUTOSAVE_DEBOUNCE_MS = 500;
 
-function PageButton({ page }: { page: string }) {
+function PageButton({ page, onRemove }: { page: string; onRemove: () => void }) {
   const handleClick = () => {
     const pageNum = Number.parseInt(String(page), 10);
     if (Number.isNaN(pageNum) || pageNum <= 0) return;
@@ -50,18 +49,37 @@ function PageButton({ page }: { page: string }) {
     );
   };
   return (
-    <button
-      className="inline-flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-primary bg-accent/50 border border-border rounded-md hover:bg-accent hover:border-primary/50 transition-colors duration-150 cursor-pointer"
-      onClick={handleClick}
-    >
-      <FileText className="w-3 h-3" />
-      Page {page}
-    </button>
+    <span className="inline-flex items-center rounded-md border border-border bg-accent/50 text-xs font-medium text-primary transition-colors duration-150 hover:border-primary/50 hover:bg-accent">
+      <button
+        type="button"
+        onClick={handleClick}
+        title={`Jump to page ${page}`}
+        className="inline-flex cursor-pointer items-center gap-1.5 px-2 py-1"
+      >
+        <FileText className="w-3 h-3" />
+        Page {page}
+      </button>
+      <button
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          onRemove();
+        }}
+        title="Remove page link"
+        aria-label="Remove page link"
+        className="cursor-pointer px-1 py-1 text-muted-foreground hover:text-destructive"
+      >
+        <X className="w-3 h-3" />
+      </button>
+    </span>
   );
 }
 
 // Enhanced JSX Editor wrapper component with correct prop handling
 function PageButtonEditor({ mdastNode }: JsxEditorProps) {
+  // Removes exactly this JSX node, so each page link can be deleted on its own.
+  const removeNode = useLexicalNodeRemove();
+
   // Correct prop resolution - attributes is an array of {name, value} objects
   let page = "1"; // default
 
@@ -78,7 +96,7 @@ function PageButtonEditor({ mdastNode }: JsxEditorProps) {
     }
   }
 
-  return <PageButton page={String(page)} />;
+  return <PageButton page={String(page)} onRemove={removeNode} />;
 }
 
 // Fixed inline toolbar button component for inserting page buttons
@@ -87,17 +105,20 @@ function InsertPageButton() {
   const [isInputVisible, setIsInputVisible] = useState(false);
   const [pageNumber, setPageNumber] = useState("");
 
+  // Only positive whole numbers make a valid page reference.
+  const isValidPage = /^\d+$/.test(pageNumber) && Number(pageNumber) > 0;
+
   const handleInsert = () => {
-    if (pageNumber.trim()) {
+    if (isValidPage) {
       const jsxPayload = {
         name: "PageButton",
         kind: "text" as const,
         props: {
-          page: pageNumber.trim(),
+          page: pageNumber,
         },
         // Add additional properties that might help with prop passing
         attributes: {
-          page: pageNumber.trim(),
+          page: pageNumber,
         },
       };
 
@@ -128,15 +149,17 @@ function InsertPageButton() {
       <div className="flex items-center gap-1 px-2 py-1 bg-background border border-border rounded-md">
         <Input
           placeholder="Page number"
+          inputMode="numeric"
+          pattern="[0-9]*"
           value={pageNumber}
-          onChange={(e) => setPageNumber(e.target.value)}
+          onChange={(e) => setPageNumber(e.target.value.replace(/\D/g, ""))}
           onKeyDown={handleKeyDown}
           className="w-20 h-6 px-2 py-0 text-xs border-0 bg-transparent focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0"
           autoFocus
         />
         <button
           onClick={handleInsert}
-          disabled={!pageNumber.trim()}
+          disabled={!isValidPage}
           className="h-6 w-6 p-0 bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 rounded flex items-center justify-center"
         >
           <Check className="w-3 h-3" />
@@ -153,10 +176,14 @@ function InsertPageButton() {
 
   return (
     <ButtonWithTooltip
-      title="Insert page reference"
+      title="Add link to page"
       onClick={() => setIsInputVisible(true)}
+      className="inline-flex items-center"
     >
-      <FileText className="w-4 h-4" />
+      <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+        <FileText className="w-4 h-4" />
+        <span className="text-xs">link to page</span>
+      </span>
     </ButtonWithTooltip>
   );
 }
@@ -164,9 +191,11 @@ function InsertPageButton() {
 function SaveStatusLabel({
   saveState,
   syncStatus,
+  hasContent,
 }: {
   saveState: "idle" | "dirty" | "saving" | "error";
   syncStatus?: "synced" | "pending" | "conflict" | "failed";
+  hasContent: boolean;
 }) {
   if (saveState === "saving") return <>Saving…</>;
   if (saveState === "dirty") return <>Unsaved changes</>;
@@ -177,16 +206,27 @@ function SaveStatusLabel({
     return <span className="text-destructive">Sync failed</span>;
   if (syncStatus === "conflict")
     return <span className="text-destructive">Conflict</span>;
+  // "Saved" must mean "a write actually happened", not "nothing is pending".
+  if (!hasContent) return null;
   return <>Saved</>;
 }
 
-export const NoteEditor = ({ bookId }: { bookId: string }) => {
+export const NoteEditor = ({
+  bookId,
+  open,
+  onClose,
+}: {
+  bookId: string;
+  open: boolean;
+  onClose: () => void;
+}) => {
   const db = useDb();
-  const editorRef = useRef<MDXEditorMethods>(null);
-  const { data: note } = useNote(bookId);
+  const { data: note, isPending: isNoteLoading } = useNote(bookId);
 
-  const [open, setOpen] = useState(true);
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  // Holding the instance in state (not just a ref) is what re-runs the sync
+  // effect when the dynamically imported editor finally mounts. A remount
+  // produces a new instance object, so the effect runs again for that too.
+  const [editor, setEditor] = useState<MDXEditorMethods | null>(null);
   const [saveState, setSaveState] = useState<
     "idle" | "dirty" | "saving" | "error"
   >("idle");
@@ -194,52 +234,95 @@ export const NoteEditor = ({ bookId }: { bookId: string }) => {
   // Latest editor content, and the last body persisted to the DB.
   const latestMdRef = useRef("");
   const persistedMdRef = useRef("");
+  const seededRef = useRef(false);
   const dirtyRef = useRef(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savePromiseRef = useRef<Promise<void> | null>(null);
 
   const conflicted = note?.syncStatus === "conflict";
 
-  // Apply the DB note to the editor when it is not dirty.
+  // Seed the "what the editor already shows / what the DB holds" refs in the
+  // same render that lets the editor mount. This must happen before effects:
+  // MDXEditor emits an onChange while importing its initial markdown, and an
+  // empty `latestMdRef` there would look like a user edit (and autosave).
+  if (!isNoteLoading && !seededRef.current) {
+    const body = note?.body ?? "";
+    seededRef.current = true;
+    latestMdRef.current = body;
+    persistedMdRef.current = body;
+  }
+
+  const attachEditor = useCallback((instance: MDXEditorMethods | null) => {
+    setEditor(instance);
+  }, []);
+
+  // Apply the DB note to the editor once the editor exists and no unflushed
+  // local edits would be clobbered.
   useEffect(() => {
-    if (!editorRef.current) return;
+    if (!editor) return;
     if (dirtyRef.current) return;
+
     const body = note?.body ?? "";
     if (body === persistedMdRef.current && body === latestMdRef.current) return;
-    editorRef.current.setMarkdown(body);
+
+    // Update the refs before touching the editor: `setMarkdown` emits
+    // onChange (synchronously and again after the re-import), and those echoes
+    // must not be mistaken for user edits — otherwise deleting a note would
+    // immediately re-create it from the cleared editor.
     latestMdRef.current = body;
     persistedMdRef.current = body;
     dirtyRef.current = false;
+    editor.setMarkdown(body);
     setSaveState("idle");
-  }, [note]);
+  }, [note, editor]);
 
   const persist = useCallback(async () => {
-    if (savePromiseRef.current) return;
-    savePromiseRef.current = (async () => {
-      while (true) {
+    // A running loop keeps draining `dirtyRef`, so a change that arrives
+    // while a write is in flight is picked up by that loop instead of being
+    // dropped (the old code returned and never retried).
+    if (savePromiseRef.current) return savePromiseRef.current;
+
+    const task = (async () => {
+      while (dirtyRef.current) {
         const md = latestMdRef.current;
         if (md === persistedMdRef.current) break;
+
         setSaveState("saving");
         try {
           await upsertNote(db, bookId, md);
-          persistedMdRef.current = md;
-          if (latestMdRef.current === md) {
-            dirtyRef.current = false;
-            setSaveState("idle");
-          }
-          await invalidateNote(bookId);
         } catch (error) {
           const message =
             error instanceof Error ? error.message : String(error);
           toast.error(`Failed to save note: ${message}`);
           dirtyRef.current = false;
           setSaveState("error");
-          break;
+          return;
+        }
+
+        persistedMdRef.current = md;
+        if (latestMdRef.current === md) {
+          dirtyRef.current = false;
+          setSaveState("idle");
+        }
+
+        try {
+          await invalidateNote(bookId);
+        } catch {
+          // The note is already written; a failed refetch must not be
+          // reported as a failed save.
         }
       }
-    })().finally(() => {
+
+      dirtyRef.current = false;
+      setSaveState((prev) => (prev === "error" ? prev : "idle"));
+    })();
+
+    savePromiseRef.current = task;
+    try {
+      await task;
+    } finally {
       savePromiseRef.current = null;
-    });
+    }
   }, [db, bookId]);
 
   const flush = useCallback(() => {
@@ -247,11 +330,18 @@ export const NoteEditor = ({ bookId }: { bookId: string }) => {
       clearTimeout(debounceRef.current);
       debounceRef.current = null;
     }
-    persist();
+    void persist();
   }, [persist]);
 
   const handleMarkdownChange = useCallback(
-    (markdown: string) => {
+    (markdown: string, isInitial: boolean) => {
+      // MDXEditor emits once with the parsed initial markdown. Treating that
+      // as an edit would autosave (and re-format / re-sync) on every open —
+      // with the empty editor this used to wipe the stored note.
+      if (isInitial) return;
+      // Echo of content we just pushed into the editor (setMarkdown).
+      if (markdown === latestMdRef.current) return;
+
       latestMdRef.current = markdown;
       dirtyRef.current = true;
       setSaveState("dirty");
@@ -261,52 +351,41 @@ export const NoteEditor = ({ bookId }: { bookId: string }) => {
     [flush],
   );
 
-  // Flush pending edits when leaving the page.
+  // Flush pending edits on unmount, when the tab is hidden (minimize / switch
+  // away), and on pagehide (refresh / navigation). Without this, the tail of a
+  // typing burst could sit in the debounce window and never be written.
   useEffect(() => {
-    return () => {
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current);
-        debounceRef.current = null;
-      }
-      persist();
+    const handleVisibility = () => {
+      if (document.visibilityState === "hidden") flush();
     };
-  }, [persist]);
 
-  const handleDelete = async () => {
-    try {
-      await deleteNote(db, bookId);
-      setConfirmDelete(false);
-      toast.success("Note deleted");
-      await invalidateNote(bookId);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      toast.error(`Failed to delete note: ${message}`);
-    }
-  };
+    document.addEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("pagehide", flush);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener("pagehide", flush);
+      flush();
+    };
+  }, [flush]);
+
+  // The toolbar owns the open/close transition now. Flush pending edits when
+  // the panel closes, just like the old in-editor collapse button did.
+  const wasOpenRef = useRef(open);
+  useEffect(() => {
+    if (wasOpenRef.current && !open) flush();
+    wasOpenRef.current = open;
+  }, [open, flush]);
 
   const openConflictInbox = () => {
     window.dispatchEvent(new CustomEvent("open-conflict-inbox"));
   };
 
-  if (!open) {
-    return (
-      <div className="h-screen shrink-0 border-l border-border bg-background flex flex-col items-center pt-4 gap-4 w-10">
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          title="Open notes"
-          aria-label="Open notes"
-          className="text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-        >
-          <ChevronLeft className="w-4 h-4" />
-        </button>
-        <StickyNote className="w-4 h-4 text-muted-foreground" />
-      </div>
-    );
-  }
-
   return (
-    <aside className="h-screen w-[420px] shrink-0 border-l border-border bg-background flex flex-col overflow-hidden">
+    <aside
+      className={`h-full shrink-0 bg-background flex flex-col overflow-hidden ${
+        open ? "w-[420px] border-l border-border" : "w-0"
+      }`}
+    >
       <div className="flex items-center justify-between px-4 py-3 border-b border-border">
         <div className="flex items-center gap-2">
           <StickyNote className="w-4 h-4 text-muted-foreground" />
@@ -317,27 +396,17 @@ export const NoteEditor = ({ bookId }: { bookId: string }) => {
             <SaveStatusLabel
               saveState={saveState}
               syncStatus={note?.syncStatus}
+              hasContent={Boolean(note?.body)}
             />
           </span>
-          {!conflicted && note && (
-            <button
-              type="button"
-              onClick={() => setConfirmDelete((v) => !v)}
-              title="Delete note"
-              aria-label="Delete note"
-              className="text-muted-foreground hover:text-destructive transition-colors cursor-pointer p-1"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          )}
           <button
             type="button"
-            onClick={() => setOpen(false)}
-            title="Collapse notes"
-            aria-label="Collapse notes"
+            onClick={onClose}
+            title="Close notes"
+            aria-label="Close notes"
             className="text-muted-foreground hover:text-foreground transition-colors cursor-pointer p-1"
           >
-            <ChevronRight className="w-4 h-4" />
+            <X className="w-4 h-4" />
           </button>
         </div>
       </div>
@@ -358,36 +427,24 @@ export const NoteEditor = ({ bookId }: { bookId: string }) => {
         </div>
       )}
 
-      {confirmDelete && (
-        <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-muted/30">
-          <span className="text-xs flex-1">Delete this note?</span>
-          <Button
-            size="sm"
-            variant="destructive"
-            onClick={handleDelete}
-            className="h-7 text-xs cursor-pointer"
-          >
-            Delete
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setConfirmDelete(false)}
-            className="h-7 text-xs cursor-pointer"
-          >
-            Cancel
-          </Button>
-        </div>
-      )}
-
+      {/* The editor stays mounted while collapsed: unmounting it used to
+          re-create an empty editor on reopen (and lose the content on
+          refresh). Hidden with CSS so its state survives. */}
       <div
-        className={`flex-1 overflow-hidden relative ${conflicted ? "pointer-events-none select-none opacity-80" : ""}`}
+        className={`relative flex-1 overflow-hidden ${
+          open ? "" : "hidden"
+        } ${conflicted ? "pointer-events-none select-none opacity-80" : ""}`}
       >
         <div className="h-full overflow-auto">
-          <Editor
-            ref={editorRef}
-            markdown=""
-            onChange={handleMarkdownChange}
+          {isNoteLoading ? (
+            <div className="flex h-32 items-center justify-center">
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <Editor
+              ref={attachEditor}
+              markdown={note?.body ?? ""}
+              onChange={handleMarkdownChange}
             className="prose prose-sm w-full max-w-full prose-invert dark-theme dark-editor"
             plugins={[
               headingsPlugin(),
@@ -446,6 +503,7 @@ export const NoteEditor = ({ bookId }: { bookId: string }) => {
               }),
             ]}
           />
+          )}
         </div>
       </div>
     </aside>

@@ -6,13 +6,12 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarHeader,
-  useSidebar,
 } from "@/components/ui/sidebar";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import Image from "next/image";
-import { PanelLeftClose, Search, Settings, Star, Trash2 } from "lucide-react";
+import { Search, Settings, Star, Trash2 } from "lucide-react";
 import { useSearchLauncher } from "@/features/Search";
 import { useRouter } from "next/navigation";
 import { SyncStatusChip, SyncNowButton } from "@/features/Sync";
@@ -33,7 +32,7 @@ function SidebarBookList({ books, label }: { books: Book[]; label: string }) {
             <li
               key={book.id}
               className="hover:bg-muted px-2 py-1 rounded flex justify-between items-center cursor-pointer"
-              onClick={() => router.push(`/dashboard/book/${book.fileId}`)}
+              onClick={() => router.push(`/library/book/${book.fileId}`)}
             >
               <span className="truncate">{book.title}</span>
               {book.isFavourite && <Star size={14} className="text-yellow-400 flex-shrink-0" />}
@@ -46,7 +45,6 @@ function SidebarBookList({ books, label }: { books: Book[]; label: string }) {
 }
 
 export function AppSidebar() {
-  const { toggleSidebar } = useSidebar();
   const { onOpen: onSearchLauncherOpen } = useSearchLauncher();
   const router = useRouter();
   const { user } = useAuth();
@@ -74,9 +72,9 @@ export function AppSidebar() {
 
   return (
     <Sidebar className="bg-card text-foreground border-r-muted" variant="sidebar">
-      <SidebarHeader className="flex items-center flex-row justify-between px-4 py-3 border-b border-border ">
+      <SidebarHeader className="flex items-center flex-row px-4 py-3 border-b border-border ">
         <div className="flex items-center gap-2 cursor-pointer"
-          onClick={() => router.push("/dashboard")}
+          onClick={() => router.push("/library")}
         >
           <div className="w-8 h-8 bg-secondary rounded overflow-hidden relative">
             <Image
@@ -88,11 +86,6 @@ export function AppSidebar() {
           </div>
           <span className="font-semibold text-lg">Vault Reader</span>
         </div>
-        <Button size="icon" variant="ghost" className="text-muted-foreground cursor-pointer"
-          onClick={toggleSidebar}
-        >
-          <PanelLeftClose size={20} />
-        </Button>
       </SidebarHeader>
 
       {/* Content */}
@@ -158,7 +151,7 @@ export function AppSidebar() {
             aria-label="Settings"
             title="Settings"
             className="text-muted-foreground hover:text-foreground cursor-pointer"
-            onClick={() => router.push("/dashboard/settings")}
+            onClick={() => router.push("/library/settings")}
           >
             <Settings size={18} />
           </Button>

@@ -14,7 +14,11 @@ export async function getNote(
   db: BookVaultDexie,
   bookId: string,
 ): Promise<Note | null> {
-  return (await db.notes.get(bookId)) ?? null;
+  const note = await db.notes.get(bookId);
+  // Soft-deleted notes (locally or from another device via pull) must read as
+  // absent, otherwise the editor keeps showing a note that was deleted.
+  if (!note || note.deletedAt !== null) return null;
+  return note;
 }
 
 /**
@@ -40,6 +44,8 @@ export async function upsertNote(
     await db.notes.where("bookId").equals(bookId).modify({
       body,
       updatedAt: now,
+      // Editing a soft-deleted note resurrects it instead of leaving a tombstone.
+      deletedAt: null,
       syncStatus: book?.syncScope === "cloud" ? "pending" : "synced",
     });
 
@@ -51,6 +57,9 @@ export async function upsertNote(
         op: "upsert",
         payload: { body },
         baseRevision: existing.baseRevision,
+        // Notes have no separate restore flow: editing a soft-deleted note
+        // replaces its pending delete so it comes back on the server too.
+        allowUpsertAfterDelete: true,
       });
       scheduleSync();
     }
@@ -76,6 +85,7 @@ export async function upsertNote(
         op: "upsert",
         payload: { body },
         baseRevision: 0,
+        allowUpsertAfterDelete: true,
       });
       scheduleSync();
     }

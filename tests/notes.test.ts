@@ -192,4 +192,29 @@ describe("getNote", () => {
 
     await expect(getNote(db, "book-1")).resolves.toBeNull();
   });
+
+  it("returns null for a soft-deleted note (e.g. deleted on another device)", async () => {
+    await seedBook({ syncScope: "cloud" });
+    await seedNote();
+
+    await deleteNote(db, "book-1");
+
+    await expect(getNote(db, "book-1")).resolves.toBeNull();
+  });
+});
+
+describe("note resurrection", () => {
+  it("editing a soft-deleted note clears its deletedAt", async () => {
+    await seedBook({ syncScope: "cloud" });
+    await seedNote();
+    await deleteNote(db, "book-1");
+
+    await upsertNote(db, "book-1", "rewritten");
+
+    const row = await db.notes.get("book-1");
+    expect(row?.deletedAt).toBeNull();
+    await expect(getNote(db, "book-1")).resolves.toMatchObject({
+      body: "rewritten",
+    });
+  });
 });

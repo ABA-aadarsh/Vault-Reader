@@ -32,7 +32,7 @@ export default function SignInPage() {
   const onSubmit = async (data: SignInFormData) => {
     try {
       await AuthAPI.signin(data.email, data.password);
-      router.push('/dashboard');
+      router.push('/library');
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Sign in failed.');
     }

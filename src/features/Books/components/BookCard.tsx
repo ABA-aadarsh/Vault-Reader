@@ -140,7 +140,7 @@ export const BookCard = ({
       return;
     }
 
-    router.push(`/dashboard/book/${fileId}`);
+    router.push(`/library/book/${fileId}`);
   };
 
   const renderDownloadBadge = () => {

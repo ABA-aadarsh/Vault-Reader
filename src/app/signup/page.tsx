@@ -40,7 +40,7 @@ export default function SignUpPage() {
     try {
       const fullName = `${data.firstName} ${data.lastName}`;
       await AuthAPI.signup(data.email, data.password, fullName);
-      router.push('/dashboard');
+      router.push('/library');
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Sign up failed');
     }

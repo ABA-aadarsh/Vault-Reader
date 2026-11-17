@@ -1,4 +1,4 @@
-﻿# Vault Reader — Sync Architecture Plan
+# Vault Reader — Sync Architecture Plan
 
 ## 1. Goal
 
@@ -360,7 +360,7 @@ While conflict open: pause sync **only for that entity**; rest continues.
 
 ## 9. Auth & session
 
-- Dashboard requires prior login at least once.
+- Library requires prior login at least once.
 - Persist session via Supabase client; cache `userId` + profile for offline shell.
 - Offline + expired access token, refresh fails: **banner** “Sign in to sync”; local CRUD allowed; queue cloud ops.
 - Online + refresh works: silent; run cycle.
@@ -404,7 +404,7 @@ While conflict open: pause sync **only for that entity**; rest continues.
 - Tombstone GC: defer to Phase 8; orphan GC: delete with DB row
 - PDF auto-download default: `never`
 
-**Exit:** Done. Cloud schema applied; old metadata dropped; storage cleanup pending via dashboard.
+**Exit:** Done. Cloud schema applied; old metadata dropped; storage cleanup pending via library.
 
 ---
 
@@ -420,7 +420,7 @@ While conflict open: pause sync **only for that entity**; rest continues.
 **Decisions locked for Phase 1 (from grilling session):**
 - Dexie factory: React Context provider (`UserDbProvider` + `useDb()` hook)
 - Schema migration: Clean break — delete old DB, create fresh with new schema
-- Provider integration: `UserDbProvider` nested inside `RequireAuth` via `DashboardContent` wrapper
+- Provider integration: `UserDbProvider` nested inside `RequireAuth` via `LibraryContent` wrapper
 - Logout behavior: Close DB on provider unmount (React lifecycle); no changes to `AuthAPI.signout()`
 - Domain types: Separate from Dexie types, with mappers (`src/lib/domain.ts`, `src/lib/mappers.ts`)
 - File structure: `src/lib/dexie/` directory (`db.ts`, `schema.ts`, `types.ts`, `index.ts`)
@@ -437,7 +437,7 @@ While conflict open: pause sync **only for that entity**; rest continues.
 - `src/lib/domain.ts` — Domain types (Book, Note, ReadingState)
 - `src/lib/mappers.ts` — Dexie ↔ domain conversion
 - `src/features/supabase/auth/components/RequireAuth.tsx` — Added AuthContext
-- `src/app/dashboard/layout.tsx` — Added UserDbProvider wrapper
+- `src/app/library/layout.tsx` — Added UserDbProvider wrapper
 - `src/features/supabase/books/book.service.ts` - Rewritten for new schema
 - `src/features/supabase/sync/syncManager.ts` - Rewritten for new schema
 - `src/features/Books/hooks/useLocalBookList.ts` — Updated types
@@ -470,8 +470,8 @@ While conflict open: pause sync **only for that entity**; rest continues.
 **Files modified:**
 - `src/lib/dexie/index.ts` — added re-exports for repo modules
 - `src/features/Books/_components/BookCard.tsx` — uses `useDeleteBook` hook
-- `src/app/dashboard/page.tsx` — uses `useBooks()` + `getImageBlob()`
-- `src/app/dashboard/book/[bookId]/page.tsx` — uses `useBooks()` + `getFileBlob()`
+- `src/app/library/page.tsx` — uses `useBooks()` + `getImageBlob()`
+- `src/app/library/book/[bookId]/page.tsx` — uses `useBooks()` + `getFileBlob()`
 - `src/features/Books/provider/BookDropAddProvider.tsx` — uses `useCreateBook()`, removed sync triggers
 
 **Files deleted:**
@@ -585,7 +585,7 @@ While conflict open: pause sync **only for that entity**; rest continues.
 
 **Files modified:**
 - `src/features/supabase/sync/syncManager.ts` — push then bounded pull, followed by cover planning
-- `src/app/dashboard/book/[bookId]/page.tsx` — downloads missing cloud PDFs on open
+- `src/app/library/book/[bookId]/page.tsx` — downloads missing cloud PDFs on open
 - `src/features/sync/push.ts` — hydrate partial book payloads before CAS; detect zero-row delete conflicts
 
 **New implementation findings:**
@@ -654,7 +654,7 @@ While conflict open: pause sync **only for that entity**; rest continues.
 - Auto field-merge: `title`/`author` clash → field_clash inbox; `tags` → set-union; `isFavourite` → remote wins (LWW)
 - Resolvers: field picker (per-field local/remote), note side-by-side, update-vs-delete (restore / confirm delete)
 - Conflict entry points: `push.ts` `handleBookConflict` / `handleNoteConflict` / `handleDeleteConflict`
-- Inbox: `ConflictInbox` Sheet (mounted in dashboard layout), opened via `open-conflict-inbox` event + chip click
+- Inbox: `ConflictInbox` Sheet (mounted in library layout), opened via `open-conflict-inbox` event + chip click
 
 **Files created:**
 - `src/features/sync/policy.ts` — `attemptAutoMerge`
@@ -701,9 +701,9 @@ While conflict open: pause sync **only for that entity**; rest continues.
 - `src/features/sync/SyncEngine.ts` — `purgeExpiredTombstones` after pull
 - `src/features/Books/_components/BookCard.tsx` — BookMenu replaces inline edit/delete; added `syncScope`/`fileSyncStatus` to UI Book type
 - `src/features/Books/hooks/useDeleteBook.ts` — invalidate `deletedBooks`
-- `src/app/dashboard/page.tsx` — scope-aware delete copy, promote dialog, remove-download handler, `versionStatus` from real `syncStatus`
+- `src/app/library/page.tsx` — scope-aware delete copy, promote dialog, remove-download handler, `versionStatus` from real `syncStatus`
 - `src/components/shared/SidebarContainer.tsx` — "Recently deleted" entry
-- `src/app/dashboard/layout.tsx` — mount `RecentlyDeletedSheet`
+- `src/app/library/layout.tsx` — mount `RecentlyDeletedSheet`
 
 **Exit:** lifecycle matches product language.
 
@@ -712,14 +712,14 @@ While conflict open: pause sync **only for that entity**; rest continues.
 ### Phase 9 — Auth offline UX *(completed)*
 
 9.1 Session expiry detection *(done — `fromCache`/`sessionExpired` flags in `AuthContext`; `RequireAuth` falls back to cached user when offline)*
-9.2 Banner component *(done — `SessionExpiryBanner` mounted in dashboard layout; try refresh then `/signin`)*
+9.2 Banner component *(done — `SessionExpiryBanner` mounted in library layout; try refresh then `/signin`)*
 9.3 Allow local mutations + queue while blocked from network ops *(done — verified: repos still `enqueue()` locally; engine pauses but DB stays open)*
 9.4 Re-auth → automatic cycle drain *(done — `RequireAuth` calls `engine.scheduleSync()` on `TOKEN_REFRESHED`/`SIGNED_IN`; interval also self-heals)*
 9.5 RequireAuth allows offline shell when cached user present *(done — offline `getSession()` failure falls back to cached user instead of redirect)*
 
 **Decisions locked for Phase 9 (grilling session):**
 - Session caching: rely on Supabase's built-in localStorage persistence (no duplicate cache)
-- SIGNED_OUT offline: keep user in dashboard, show banner
+- SIGNED_OUT offline: keep user in library, show banner
 - SIGNED_OUT online: redirect to `/signin` (genuine sign-out)
 - Banner trigger: `sessionExpired` OR `fromCache`
 - Banner dismissable: no — persists until re-auth
@@ -736,7 +736,7 @@ While conflict open: pause sync **only for that entity**; rest continues.
 - `src/features/supabase/auth/components/RequireAuth.tsx` — offline fallback to cached user, `fromCache`/`sessionExpired` flags in `AuthContext`, don't drop user on offline SIGNED_OUT, trigger `engine.scheduleSync()` on re-auth
 - `src/features/supabase/auth/auth.service.ts` — expose `getCachedUser()`
 - `src/features/Books/_components/BookMenu.tsx` — promote disabled when `fromCache` (guard null session)
-- `src/app/dashboard/layout.tsx` — mount `SessionExpiryBanner`
+- `src/app/library/layout.tsx` — mount `SessionExpiryBanner`
 
 **Exit:** airplane mode usable after first login; banner prompts re-auth; local mutations queue; re-auth drains.
 

@@ -60,7 +60,7 @@ describe("sw-policy — cache naming", () => {
 
   it("precaches the app shell entry points", () => {
     expect(PRECACHE_URLS).toEqual(
-      expect.arrayContaining(["/", "/dashboard", "/offline", "/logo.png", "/placeholder.jpeg"]),
+      expect.arrayContaining(["/", "/library", "/offline", "/logo.png", "/placeholder.jpeg"]),
     );
   });
 });
@@ -79,22 +79,22 @@ describe("sw-policy — classifyRequest", () => {
   });
 
   it("treats navigations as network-first", () => {
-    expect(classifyRequest(makeRequest("/dashboard", { mode: "navigate" }), ORIGIN)).toBe("network-first");
+    expect(classifyRequest(makeRequest("/library", { mode: "navigate" }), ORIGIN)).toBe("network-first");
     expect(
-      classifyRequest(makeRequest("/dashboard/book/f1", { mode: "navigate" }), ORIGIN),
+      classifyRequest(makeRequest("/library/book/f1", { mode: "navigate" }), ORIGIN),
     ).toBe("network-first");
   });
 
   it("caches RSC payloads that carry the _rsc marker", () => {
-    expect(classifyRequest(makeRequest("/dashboard?_rsc=1abc"), ORIGIN)).toBe("network-first");
+    expect(classifyRequest(makeRequest("/library?_rsc=1abc"), ORIGIN)).toBe("network-first");
   });
 
   it("never caches header-only RSC requests (URL collides with the document)", () => {
     expect(
-      classifyRequest(makeRequest("/dashboard", { headers: { RSC: "1" } }), ORIGIN),
+      classifyRequest(makeRequest("/library", { headers: { RSC: "1" } }), ORIGIN),
     ).toBe("network-only");
     expect(
-      classifyRequest(makeRequest("/dashboard", { headers: { "Next-Router-Prefetch": "1" } }), ORIGIN),
+      classifyRequest(makeRequest("/library", { headers: { "Next-Router-Prefetch": "1" } }), ORIGIN),
     ).toBe("network-only");
   });
 
@@ -115,12 +115,12 @@ describe("sw-policy — classifyRequest", () => {
   });
 
   it("never caches non-GET requests", () => {
-    expect(classifyRequest(makeRequest("/dashboard", { method: "POST" }), ORIGIN)).toBe("network-only");
-    expect(classifyRequest(makeRequest("/dashboard", { method: "DELETE" }), ORIGIN)).toBe("network-only");
+    expect(classifyRequest(makeRequest("/library", { method: "POST" }), ORIGIN)).toBe("network-only");
+    expect(classifyRequest(makeRequest("/library", { method: "DELETE" }), ORIGIN)).toBe("network-only");
   });
 
   it("falls back to network-first for everything else", () => {
-    expect(classifyRequest(makeRequest("/dashboard"), ORIGIN)).toBe("network-first");
+    expect(classifyRequest(makeRequest("/library"), ORIGIN)).toBe("network-first");
     expect(
       classifyRequest(makeRequest("https://covers.openlibrary.org/b/id/1-L.jpg"), ORIGIN),
     ).toBe("network-first");
@@ -128,18 +128,18 @@ describe("sw-policy — classifyRequest", () => {
 });
 
 describe("sw-policy — navigation fallbacks", () => {
-  it("falls back to /dashboard for dashboard routes", () => {
-    expect(navigationFallbackPaths("/dashboard/book/f1")).toEqual(["/dashboard", "/", "/offline"]);
+  it("falls back to /library for library routes", () => {
+    expect(navigationFallbackPaths("/library/book/f1")).toEqual(["/library", "/", "/offline"]);
   });
 
-  it("skips /dashboard for non-dashboard routes", () => {
+  it("skips /library for non-library routes", () => {
     expect(navigationFallbackPaths("/signin")).toEqual(["/", "/offline"]);
   });
 
   it("does not duplicate / and always ends at /offline", () => {
     expect(navigationFallbackPaths("/")).toEqual(["/offline"]);
-    expect(navigationFallbackPaths("/dashboard")[0]).toBe("/dashboard");
-    expect(navigationFallbackPaths("/dashboard").at(-1)).toBe("/offline");
+    expect(navigationFallbackPaths("/library")[0]).toBe("/library");
+    expect(navigationFallbackPaths("/library").at(-1)).toBe("/offline");
   });
 });
 
@@ -174,7 +174,7 @@ describe("sw-policy — helpers", () => {
   it("detects cache-first paths from extensions", () => {
     expect(isCacheFirstPath("/_next/static/chunks/x.js")).toBe(true);
     expect(isCacheFirstPath("/covers/cover.PNG")).toBe(true);
-    expect(isCacheFirstPath("/dashboard")).toBe(false);
+    expect(isCacheFirstPath("/library")).toBe(false);
   });
 
   it("detects supabase hosts", () => {
@@ -184,8 +184,8 @@ describe("sw-policy — helpers", () => {
   });
 
   it("detects RSC requests", () => {
-    expect(isRscRequest(makeRequest("/dashboard?_rsc=9"), new URL(`${ORIGIN}/dashboard?_rsc=9`))).toBe(true);
-    expect(isRscRequest(makeRequest("/dashboard"), new URL(`${ORIGIN}/dashboard`))).toBe(false);
+    expect(isRscRequest(makeRequest("/library?_rsc=9"), new URL(`${ORIGIN}/library?_rsc=9`))).toBe(true);
+    expect(isRscRequest(makeRequest("/library"), new URL(`${ORIGIN}/library`))).toBe(false);
   });
 
   it("extracts build assets from rendered HTML", () => {

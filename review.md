@@ -58,7 +58,7 @@ features/
 
 ```
 Root Layout → QueryProvider
-  └─ Dashboard Layout → RequireAuth → UserDbProvider → SearchLauncherProvider → BookAddProvider → SidebarProvider
+  └─ Library Layout → RequireAuth → UserDbProvider → SearchLauncherProvider → BookAddProvider → SidebarProvider
 ```
 
 ### Service / Data Layer (`src/lib/`)
@@ -120,11 +120,11 @@ Root Layout → QueryProvider
 
 1. User visits `/` — landing page with hero, features section, and footer
 2. User signs up/in at `/signup` or `/signin` — Zod-validated forms, Supabase auth
-3. Redirected to `/dashboard` — protected by `RequireAuth`; sidebar loads real library data
-4. Dashboard shows library — books loaded from per-user Dexie DB, covers as blob URLs
+3. Redirected to `/library` — protected by `RequireAuth`; sidebar loads real library data
+4. Library shows library — books loaded from per-user Dexie DB, covers as blob URLs
 5. User adds a book — stored locally; promoted to cloud (default) or kept local-only
 6. Sync engine — coalesced outbox → CAS push → cursor pull → eager covers / lazy PDFs; conflicts surface in the inbox
-7. Reader at `/dashboard/book/[bookId]` — downloads missing cloud PDFs on open; `PDFViewer` renders
+7. Reader at `/library/book/[bookId]` — downloads missing cloud PDFs on open; `PDFViewer` renders
 8. Note editor — MDX with autosave; page-reference buttons jump the viewer
 9. Progress sync (optional) — max(page)/max(percent) merge
 10. Search (Ctrl+K) — Open Library lookup with debounce; results open in a new tab

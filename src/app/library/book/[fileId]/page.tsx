@@ -1,12 +1,21 @@
 "use client";
 
 import { NoteEditor } from "@/features/Notes";
-import { PDFViewer, type PDFViewerHandle, setPage, getReadingState } from "@/features/Reader";
+import {
+  PDFViewer,
+  PdfThumbnailRail,
+  type PDFDocument,
+  type PDFViewerHandle,
+  setPage,
+  getReadingState,
+  flushReadingState,
+} from "@/features/Reader";
 import { useBooks, getFileBlob } from "@/features/Books";
 import { useState, useEffect, useCallback, useRef } from "react";
 import React from "react";
 import { Loader2, FileWarning, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useDb } from "@/data/dexie";
 import { downloadPdf } from "@/features/Sync";
 import { getIsOnline, reportReachable, reportUnreachable } from "@/lib/connectivity";
@@ -30,6 +39,10 @@ export default function BookViewPage({ params }: PageProps) {
   const [loadFailed, setLoadFailed] = useState(false);
   const [missingOffline, setMissingOffline] = useState(false);
   const [initialPage, setInitialPage] = useState<number | undefined>(undefined);
+  const [pdf, setPdf] = useState<PDFDocument | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [showThumbnails, setShowThumbnails] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(true);
   const db = useDb();
   const { user } = useAuth();
   const router = useRouter();
@@ -37,6 +50,42 @@ export default function BookViewPage({ params }: PageProps) {
   const selectedBookRef = useRef<Book | null>(null);
   const viewerRef = useRef<PDFViewerHandle>(null);
   selectedBookRef.current = selectedBook;
+
+  const handleDocumentLoad = useCallback((document: PDFDocument) => {
+    setPdf(document);
+  }, []);
+
+  const handlePageChange = useCallback(
+    (page: number, totalPages: number) => {
+      setCurrentPage(page);
+      if (selectedBook?.id) {
+        void setPage(db, selectedBook.id, page, totalPages);
+      }
+    },
+    [db, selectedBook?.id],
+  );
+
+  const handleSelectPage = useCallback((page: number) => {
+    viewerRef.current?.jumpToPage(page);
+    setShowThumbnails(false);
+  }, []);
+
+  const handleBack = useCallback(() => {
+    router.push("/library");
+  }, [router]);
+
+  // A new blob URL means a new document: drop the previous thumbnails.
+  useEffect(() => {
+    setPdf(null);
+    setCurrentPage(1);
+  }, [fileUrl]);
+
+  // Persist any queued reading position when leaving the reader.
+  useEffect(() => {
+    return () => {
+      void flushReadingState();
+    };
+  }, []);
 
   // Listen for page jumps (e.g. PageButton clicks in the note editor)
   useEffect(() => {
@@ -192,7 +241,7 @@ export default function BookViewPage({ params }: PageProps) {
             <Button onClick={() => fetchFileBlob(true)} disabled={isFetchingFile}>
               {isFetchingFile ? "Retrying..." : "Retry"}
             </Button>
-            <Button variant="outline" onClick={() => router.push("/dashboard")}>
+            <Button variant="outline" onClick={() => router.push("/library")}>
               <ArrowLeft className="w-4 h-4 mr-2" />
               Go back
             </Button>
@@ -203,28 +252,62 @@ export default function BookViewPage({ params }: PageProps) {
   }
 
   return (
-    <div className="h-screen flex  bg-background">
+    <div className="relative flex h-screen w-full min-w-0 overflow-hidden bg-background">
       {isFetchingFile && (
         <div className="absolute inset-0 flex items-center justify-center bg-background/50 z-50 rounded-lg">
           <Loader2 className="w-8 h-8 animate-spin text-muted" />
         </div>
       )}
 
-      <div className="flex-1 min-w-0 relative">
-        <PDFViewer
-          ref={viewerRef}
-          fileUrl={fileUrl}
-          initialPage={initialPage}
-          className="w-full h-full"
-          onPageChange={(page, pages) => {
-            if (selectedBook) {
-              setPage(db, selectedBook.id, page, pages);
-            }
-          }}
-        />
-      </div>
+      <PDFViewer
+        ref={viewerRef}
+        fileUrl={fileUrl}
+        initialPage={initialPage}
+        title={selectedBook.title}
+        onBack={handleBack}
+        onShowThumbnails={() => setShowThumbnails(true)}
+        onDocumentLoad={handleDocumentLoad}
+        notesOpen={notesOpen}
+        onToggleNotes={() => setNotesOpen((open) => !open)}
+        className="w-full h-full"
+        onPageChange={handlePageChange}
+        leftPanel={
+          <PdfThumbnailRail
+            key={fileUrl ?? "none"}
+            className="hidden md:flex"
+            pdf={pdf}
+            currentPage={currentPage}
+            onSelect={handleSelectPage}
+          />
+        }
+        rightPanel={
+          /* Keyed by book so switching books flushes the previous note and
+             starts from a clean editor. */
+          <NoteEditor
+            key={selectedBook.id}
+            bookId={selectedBook.id}
+            open={notesOpen}
+            onClose={() => setNotesOpen(false)}
+          />
+        }
+      />
 
-      <NoteEditor bookId={selectedBook.id} />
+      {/* Small screens: the rail is a drawer instead of a fixed column. */}
+      <Sheet open={showThumbnails} onOpenChange={setShowThumbnails}>
+        <SheetContent side="left" className="w-[220px] p-0 sm:max-w-[220px]">
+          <SheetHeader className="sr-only">
+            <SheetTitle>Page thumbnails</SheetTitle>
+          </SheetHeader>
+          <PdfThumbnailRail
+            key={fileUrl ?? "none"}
+            className="w-full border-r-0"
+            collapsible={false}
+            pdf={pdf}
+            currentPage={currentPage}
+            onSelect={handleSelectPage}
+          />
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

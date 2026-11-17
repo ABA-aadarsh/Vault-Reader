@@ -92,7 +92,7 @@ export function SearchLauncher() {
     if (!item) return;
 
     if (item.section === "local") {
-      router.push(`/dashboard/book/${item.fileId}`);
+      router.push(`/library/book/${item.fileId}`);
       closeSearchLauncher();
       return;
     }

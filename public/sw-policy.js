@@ -11,7 +11,7 @@ export const BOOKS_CACHE = `${CACHE_PREFIX}books-${CACHE_VERSION}`;
 
 export const PRECACHE_URLS = [
   "/",
-  "/dashboard",
+  "/library",
   "/signin",
   "/signup",
   "/offline",
@@ -69,7 +69,7 @@ export function isCacheFirstPath(pathname) {
 
 export function navigationFallbackPaths(pathname) {
   const paths = [];
-  if (pathname.startsWith("/dashboard")) paths.push("/dashboard");
+  if (pathname.startsWith("/library")) paths.push("/library");
   if (pathname !== "/") paths.push("/");
   paths.push("/offline");
   return paths;

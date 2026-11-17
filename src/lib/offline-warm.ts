@@ -20,7 +20,7 @@ export async function warmDownloadedBooks(db: BookVaultDexie): Promise<void> {
   const books = await db.books.toArray().catch(() => []);
   for (const book of books) {
     if (book.deletedAt || book.fileSyncStatus !== "present" || !book.fileId) continue;
-    if (await caches.match(`/dashboard/book/${book.fileId}`, { ignoreVary: true })) continue;
+    if (await caches.match(`/library/book/${book.fileId}`, { ignoreVary: true })) continue;
     await warmBookRoute(book.fileId);
   }
 }
@@ -30,7 +30,7 @@ export async function warmBookRoute(fileId: string): Promise<void> {
 
   await Promise.allSettled([
     warmWorker(),
-    postToWorker("WARM_ROUTE", `/dashboard/book/${fileId}`, [PDF_WORKER_SRC]),
+    postToWorker("WARM_ROUTE", `/library/book/${fileId}`, [PDF_WORKER_SRC]),
   ]);
 }
 
@@ -38,7 +38,7 @@ export async function warmBookRoute(fileId: string): Promise<void> {
 export async function unwarmBookRoute(fileId: string): Promise<void> {
   if (typeof window === "undefined") return;
 
-  await postToWorker("REMOVE_BOOK_ROUTE", `/dashboard/book/${fileId}`);
+  await postToWorker("REMOVE_BOOK_ROUTE", `/library/book/${fileId}`);
 }
 
 async function warmWorker(): Promise<void> {

@@ -43,7 +43,7 @@ export default function OfflinePage() {
           <RotateCw className="mr-2 h-4 w-4" />
           Try again
         </Button>
-        <Link href="/dashboard" className={buttonVariants({ variant: "outline" })}>
+        <Link href="/library" className={buttonVariants({ variant: "outline" })}>
           Open library
         </Link>
       </div>

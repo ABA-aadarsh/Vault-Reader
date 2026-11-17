@@ -1,18 +1,19 @@
 "use client";
 
+import { useSelectedLayoutSegment } from "next/navigation";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "../../components/shared/SidebarContainer";
 import { SearchLauncherProvider, SearchLauncher } from "@/features/Search";
-import 'react-pdf/dist/Page/AnnotationLayer.css';
-import 'react-pdf/dist/Page/TextLayer.css'
 
 import { RequireAuth, useAuth, SessionExpiryBanner } from "@/features/Auth";
 import { BookAddProvider, RecentlyDeletedSheet } from "@/features/Books";
 import { UserDbProvider } from "@/data/dexie";
 import { ConflictInbox } from "@/features/Sync";
 
-function DashboardContent({ children }: { children: React.ReactNode }) {
+function LibraryContent({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
+  // The reader has its own page-thumbnail rail in place of the app sidebar.
+  const isReader = useSelectedLayoutSegment() === "book";
 
   return (
     <UserDbProvider userId={user.id}>
@@ -20,9 +21,9 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
       <SearchLauncherProvider>
         <BookAddProvider>
           <SidebarProvider>
-            <AppSidebar />
-            <SidebarInset>
-              <main className="flex-1">
+            {!isReader && <AppSidebar />}
+            <SidebarInset className="min-w-0 overflow-hidden">
+              <main className="min-w-0 flex-1 overflow-hidden">
                 {children}
               </main>
             </SidebarInset>
@@ -43,7 +44,7 @@ export default function RootLayout({
 }>) {
   return (
     <RequireAuth>
-      <DashboardContent>{children}</DashboardContent>
+      <LibraryContent>{children}</LibraryContent>
     </RequireAuth>
   );
 }
